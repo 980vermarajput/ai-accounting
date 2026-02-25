@@ -3,12 +3,14 @@ import type {
   ApiResponse,
   ChatRequest,
   ChatResponse,
+  ChatSource,
   PaginatedResponse,
 } from "@ai-accounting/shared";
 import { chatRequestSchema } from "@ai-accounting/shared";
 import { requireAuth } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { prisma } from "../lib/prisma";
+import { searchChunks, generateRagAnswer, type SearchResult } from "../lib/rag";
 
 export const chatRouter: Router = Router();
 
@@ -22,32 +24,92 @@ chatRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = req.body as ChatRequest;
-      const startTime = Date.now();
+      const { userId, firmId } = req.user!;
+      const totalStart = Date.now();
 
-      // TODO: implement full RAG pipeline
-      // 1. Generate embedding for query
-      // 2. Vector search in pgvector (top-K=8, min similarity 0.72)
-      // 3. Apply recency weighting
-      // 4. Build prompt with system message + context chunks
-      // 5. Call LLM (GPT-4o-mini)
-      // 6. Extract source citations
-      // 7. Store query record
+      // 1. Vector similarity search with optional filters
+      const retrievalStart = Date.now();
+      const searchResults = await searchChunks(body.query, firmId, {
+        clientId: body.clientId,
+        dateFrom: body.filters?.dateFrom,
+        dateTo: body.filters?.dateTo,
+        sources: body.filters?.source,
+      });
+      const retrievalLatencyMs = Date.now() - retrievalStart;
 
-      const latencyMs = Date.now() - startTime;
+      // 2. LLM generation grounded in retrieved chunks
+      const ragAnswer = await generateRagAnswer(body.query, searchResults);
 
+      const latencyMs = Date.now() - totalStart;
+
+      // 3. Build ChatSource list — one entry per unique document (best chunk wins)
+      const sources = buildChatSources(searchResults);
+
+      // 4. Persist the query record for history + analytics
+      const queryRecord = await prisma.query.create({
+        data: {
+          firmId,
+          userId,
+          clientId: body.clientId ?? null,
+          queryText: body.query,
+          responseText: ragAnswer.answer,
+          retrievedChunkIds: searchResults.map((r) => r.chunkId),
+          chunksSentToLlm: searchResults.length,
+          llmModel: ragAnswer.model,
+          llmTokensPrompt: ragAnswer.tokensPrompt,
+          llmTokensCompletion: ragAnswer.tokensCompletion,
+          llmCostInr: ragAnswer.costInr,
+          latencyMs,
+          retrievalLatencyMs,
+        },
+      });
+
+      // 5. Return the response
       const response: ApiResponse<ChatResponse> = {
-        success: false,
-        error: {
-          code: "NOT_IMPLEMENTED",
-          message: "RAG chat pipeline not yet implemented",
+        success: true,
+        data: {
+          queryId: queryRecord.id,
+          answer: ragAnswer.answer,
+          sources,
+          suggestedFollowups: ragAnswer.suggestedFollowups,
+          metadata: {
+            model: ragAnswer.model,
+            tokensPrompt: ragAnswer.tokensPrompt,
+            tokensCompletion: ragAnswer.tokensCompletion,
+            costEstimateInr: ragAnswer.costInr,
+            latencyMs,
+            retrievalLatencyMs,
+            chunksRetrieved: searchResults.length,
+            chunksUsed: searchResults.length,
+          },
         },
       };
-      res.status(501).json(response);
+      res.json(response);
     } catch (err) {
       next(err);
     }
   },
 );
+
+/** Collapse multiple chunks from the same document into a single ChatSource. */
+function buildChatSources(results: SearchResult[]): ChatSource[] {
+  const docMap = new Map<string, SearchResult>();
+  for (const r of results) {
+    const existing = docMap.get(r.documentId);
+    if (!existing || r.score > existing.score) {
+      docMap.set(r.documentId, r);
+    }
+  }
+
+  return Array.from(docMap.values()).map((r) => ({
+    docId: r.documentId,
+    filename: r.filename,
+    excerpt:
+      r.chunkText.length > 200 ? r.chunkText.slice(0, 200) + "…" : r.chunkText,
+    sourceDate: r.sourceDate.toISOString().split("T")[0]!,
+    relevanceScore: Math.round(r.score * 100) / 100,
+  }));
+}
 
 // ─── GET /api/chat/history — query history with pagination ───────
 chatRouter.get(

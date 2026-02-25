@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 25 February 2026 (18:30 UTC)  
-**Status:** Embedding Pipeline Complete — Ready for RAG Chat Endpoint
+**Last Updated:** 25 February 2026 (21:00 UTC)  
+**Status:** RAG Chat Endpoint Complete — Ready for Web UI
 
 ---
 
@@ -18,10 +18,11 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - ✅ **Database:** Postgres 16 + pgvector with RLS, 8 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs)
 - ✅ **Migrations:** Applied + seeded with demo firm/users/clients
 - ✅ **Authentication:** Google OAuth + JWT fully wired; AES-256-GCM refresh token encryption in place
-- ✅ **Vitest Test Suite:** 71 tests passing (auth lib, auth middleware, Zod schemas)
+- ✅ **Vitest Test Suite:** 121 tests passing (auth lib, auth middleware, Zod schemas, chunker, extractor, embedder, rag)
 - ✅ **BullMQ Sync Workers:** Gmail + Drive workers wired end-to-end; jobs enqueued, processed, DB status updated
 - ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + sentence-aware chunking; extraction worker wired end-to-end
 - ✅ **Embedding Pipeline:** OpenAI text-embedding-3-small; batch embedding worker wired end-to-end; vectors stored via raw SQL into pgvector
+- ✅ **RAG Chat Endpoint:** `POST /api/chat` fully live — vector search, recency weighting, GPT-4o-mini, Query record storage, ChatSource citations
 
 ---
 
@@ -50,7 +51,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 | `health.ts`    | `/api/health`    | ✅ Live       | `GET /` — service status                                             |
 | `auth.ts`      | `/api/auth`      | ✅ Live       | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`     |
 | `documents.ts` | `/api/documents` | ✅ Scaffolded | `GET /` (list, paginated), `GET /:id`, `POST /upload`, `DELETE /:id` |
-| `chat.ts`      | `/api/chat`      | ✅ Scaffolded | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`      |
+| `chat.ts`      | `/api/chat`      | ✅ Live       | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`      |
 | `sync.ts`      | `/api/sync`      | ✅ Live       | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
 
 ### Utilities & Middleware
@@ -70,8 +71,9 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - **`apps/api/src/lib/chunker.test.ts`** — 11 tests for `chunkText` (empty input, sequential index, token cap, overlap, infinite-loop guard)
 - **`apps/api/src/lib/extractor.test.ts`** — 13 tests for `extractText` (plain text, CRLF, XLSX, DOCX error-handling, textHash determinism)
 - **`apps/api/src/lib/embedder.test.ts`** — 8 tests for `embedChunks` (empty input, batch size 100, 150-chunk split, order preservation, API call shape, error propagation) — OpenAI mocked via `vi.hoisted` + `vi.mock`
+- **`apps/api/src/lib/rag.test.ts`** — 18 tests for `searchChunks` (threshold filtering, recency weighting, score sorting, limit, field mapping, age-0 and age-365 score invariants) and `generateRagAnswer` (JSON parsing, fallback on invalid JSON, token/cost calculation, follow-up capping, context injection)
 - **`turbo.json`** — `test` task added with `dependsOn: ["^build"]`
-- **Total: 95 tests, all green** (65 API + 30 shared)
+- **Total: 121 tests, all green** (83 API + 38 shared)
 
 ### Embedding Pipeline
 
@@ -80,6 +82,12 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - **`apps/api/src/workers/embedding.worker.ts`** — loads unembedded chunks via raw SQL (skips already-embedded on retry) → calls `embedChunks()` → stores each vector via `$executeRaw` (`UPDATE chunks SET embedding = $1::vector`) → concurrency 1 to respect OpenAI RPM
 - **`apps/api/src/workers/extraction.worker.ts`** — updated to call `addEmbeddingJob({ documentId, firmId })` after marking document `status: "ready"`
 - **`apps/api/src/index.ts`** — starts `startEmbeddingWorker()` on server boot
+
+### RAG Chat Endpoint
+
+- **`apps/api/src/lib/rag.ts`** — `searchChunks(query, firmId, options)`: embeds query → pgvector cosine distance ORDER BY with RETRIEVAL_LIMIT=20, threshold filter (0.72) in JS, recency weighting (`score = similarity × 1/(1 + ageDays/365)`), returns top-K `SearchResult[]`; `generateRagAnswer(query, chunks)`: GPT-4o-mini with `response_format: json_object`, system prompt adapts to no-context case, returns `{answer, suggestedFollowups, model, tokensPrompt, tokensCompletion, costInr}`
+- **`apps/api/src/routes/chat.ts`** — `POST /` fully wired: `searchChunks` → `generateRagAnswer` → `buildChatSources` (dedup by documentId) → `prisma.query.create` (stores retrievedChunkIds, tokens, latency, costInr) → returns `ChatResponse`; `GET /history` and `POST /:queryId/feedback` remain as scaffolded
+- **Constants exported:** `SIMILARITY_THRESHOLD = 0.72`, `DEFAULT_LIMIT = 8`, `RECENCY_SCALE_DAYS = 365`, `CHAT_MODEL = "gpt-4o-mini"`
 
 ### Text Extraction & Chunking
 
@@ -171,10 +179,10 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Known Issues & Blockers
 
-| Issue                                  | Impact                       | Resolution                           | Status  |
-| -------------------------------------- | ---------------------------- | ------------------------------------ | ------- |
-| No RAG vector search                   | Chat endpoint non-functional | Implement pgvector similarity search | 🔴 TODO |
-| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP | Production auth handled by real JWT  | ✅ OK   |
+| Issue                                  | Impact                           | Resolution                            | Status  |
+| -------------------------------------- | -------------------------------- | ------------------------------------- | ------- |
+| No Web UI                              | Users can't interact via browser | Implement Next.js chat + documents UI | 🔴 TODO |
+| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP     | Production auth handled by real JWT   | ✅ OK   |
 
 ---
 
@@ -219,11 +227,11 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Create `src/lib/rag.ts`** — `searchChunks(query, firmId)`: embed query → pgvector cosine similarity search (top-K=8, threshold 0.72) via raw SQL + recency weighting (`score = similarity × 1/(1 + age_days/365)`)
-2. **Replace 501 stub in `POST /api/chat`** — call `embedChunks` on the query, then `searchChunks`, assemble system + context prompt, call `gpt-4o-mini` via openai, extract citation `sourceId`s, store Query record (tokens/latency/cost), return `{ answer, sources, queryId }`
-3. **Wire `GET /api/chat/history`** — paginated list of past Query rows for the firm
-4. **Wire `POST /api/chat/:queryId/feedback`** — update Query.feedback field
-5. **Write RAG tests** — unit tests for `rag.ts` with mocked Prisma `$queryRaw`, integration shape test for chat route
+1. **Web UI — Chat Interface** (`apps/web/src/app/chat/`) — message thread with query input, answer rendering with source citations, suggested follow-up chips, query history sidebar
+2. **Web UI — Documents Dashboard** (`apps/web/src/app/documents/`) — list documents by firm (status badge, source icon, filename), trigger sync, view extraction status
+3. **Web UI — Auth Flow** — Google OAuth sign-in redirect, JWT storage in HttpOnly cookie or localStorage, `useUser` hook via `/api/auth/me`
+4. **Web UI — Sync Status Panel** — show active/recent sync jobs with live polling of `GET /api/sync/status`
+5. **Email Draft Feature** — `POST /api/chat/draft` prompt template for professional CA tone + Gmail send integration
 
 ---
 
