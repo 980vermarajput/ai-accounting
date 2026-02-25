@@ -19,6 +19,13 @@ The product is a **multi-tenant RAG SaaS** for Indian chartered accountants. Dat
 docker compose -f docker-compose.dev.yml up -d   # Postgres (pgvector) + Redis
 pnpm dev                                          # starts API :4000 + Web :3000
 
+# Database operations
+cd apps/api
+pnpm db:migrate                                   # Create/apply migrations
+pnpm db:seed                                      # Seed with demo data
+pnpm db:studio                                    # Open Prisma Studio UI
+pnpm db:reset                                     # Drop + migrate + seed (careful!)
+
 # Full Docker stack (all services containerized)
 docker compose up --build
 
@@ -27,7 +34,7 @@ pnpm build        # builds shared → api → web (dependency order)
 pnpm typecheck    # type-checks all packages
 ```
 
-**Critical build order:** `@ai-accounting/shared` must build first — the API references it via `tsconfig.json` project references (`"composite": true`). Turborepo handles this via `"dependsOn": ["^build"]`.
+**Critical build order:** `@ai-accounting/shared` must build first — the API references it via `tsconfig.json` project references (`"composite": true`). Turborepo handles this via `"dependsOn": ["^build"]`. Prisma client generation also runs as part of the API build step.
 
 ## Code Patterns
 
@@ -48,8 +55,10 @@ pnpm typecheck    # type-checks all packages
 
 ### Shared (`packages/shared`)
 
-- Export all types from `src/index.ts` barrel file
-- Use `── Section ──` comment separators to group related types (Firm, User, Document, Chat, Sync, API Responses)
+- Export all types + Zod schemas from `src/index.ts` barrel file
+- **Types file** (`src/types.ts`) — domain model (Firm, User, Client, Document, Chat, Sync, API Responses)
+- **Schemas file** (`src/schemas.ts`) — Zod validation schemas for all API requests/responses
+- Use `── Section ──` comment separators to group related types
 - All API responses wrap in `ApiResponse<T>` or `PaginatedResponse<T>` — follow this pattern for every new endpoint
 
 ## Multi-Tenancy
@@ -68,3 +77,6 @@ Every data-bearing entity **must** include `firmId: string`. Database queries wi
 - **LLM provider is swappable** — abstract behind adapter interfaces, don't hardcode OpenAI
 - **Google OAuth tokens encrypted** with AES-256-GCM (per-user IV), key from env
 - **Background jobs** will use BullMQ + Redis — heavy work (sync, embedding) must never block API request threads
+- **Prisma + pgvector** for database + vector storage — no separate vector DB needed
+- **Auth middleware stub** in dev mode uses `X-Dev-User` header (override with real JWT in production)
+- **Multi-tenancy** via `firm_id` on every table with RLS policies enforced at DB level

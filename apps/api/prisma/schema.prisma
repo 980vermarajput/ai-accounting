@@ -1,0 +1,253 @@
+// ─── AI Accounting — Prisma Schema ───────────────────
+// All tables include firm_id for RLS multi-tenancy.
+// pgvector extension enabled for embedding similarity search.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector", schema: "public"), uuidOssp(map: "uuid-ossp")]
+}
+
+// ─── Enums ───────────────────────────────────────────
+
+enum Plan {
+  trial
+  starter
+  pro
+}
+
+enum UserRole {
+  admin
+  member
+}
+
+enum DocumentSource {
+  gmail
+  drive
+  upload
+}
+
+enum DocumentStatus {
+  pending
+  processing
+  ready
+  error
+}
+
+enum SyncType {
+  gmail
+  drive
+}
+
+enum SyncStatus {
+  queued
+  running
+  completed
+  failed
+}
+
+enum Feedback {
+  positive
+  negative
+  none
+}
+
+// ─── Firms ───────────────────────────────────────────
+
+model Firm {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String   @db.VarChar(255)
+  slug              String   @unique @db.VarChar(100)
+  plan              Plan     @default(trial)
+  stripeCustomerId  String?  @map("stripe_customer_id") @db.VarChar(255)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  users     User[]
+  clients   Client[]
+  documents Document[]
+  chunks    Chunk[]
+  queries   Query[]
+  auditLogs AuditLog[]
+  syncJobs  SyncJob[]
+
+  @@map("firms")
+}
+
+// ─── Users ───────────────────────────────────────────
+
+model User {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId                 String    @map("firm_id") @db.Uuid
+  email                  String    @unique @db.VarChar(255)
+  name                   String    @db.VarChar(255)
+  role                   UserRole  @default(member)
+  googleRefreshTokenEnc  Bytes?    @map("google_refresh_token_enc")
+  googleTokenIv          Bytes?    @map("google_token_iv")
+  lastSyncAt             DateTime? @map("last_sync_at") @db.Timestamptz()
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  firm      Firm       @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  documents Document[]
+  queries   Query[]
+  auditLogs AuditLog[]
+  syncJobs  SyncJob[]
+  clients   Client[]
+
+  @@index([firmId])
+  @@map("users")
+}
+
+// ─── Clients ─────────────────────────────────────────
+
+model Client {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId      String   @map("firm_id") @db.Uuid
+  createdBy   String   @map("created_by") @db.Uuid
+  name        String   @db.VarChar(255)
+  identifier  String   @db.VarChar(100)
+  emailDomain String?  @map("email_domain") @db.VarChar(255)
+  metadata    Json?    @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm      Firm       @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  creator   User       @relation(fields: [createdBy], references: [id])
+  documents Document[]
+  chunks    Chunk[]
+  queries   Query[]
+
+  @@index([firmId])
+  @@map("clients")
+}
+
+// ─── Documents ───────────────────────────────────────
+
+model Document {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId       String         @map("firm_id") @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  clientId     String?        @map("client_id") @db.Uuid
+  source       DocumentSource
+  sourceId     String         @map("source_id") @db.VarChar(500)
+  filename     String         @db.VarChar(500)
+  mimeType     String         @map("mime_type") @db.VarChar(100)
+  s3Key        String         @map("s3_key") @db.VarChar(500)
+  textHash     String         @map("text_hash") @db.VarChar(64)
+  textExcerpt  String?        @map("text_excerpt")
+  status       DocumentStatus @default(pending)
+  errorMessage String?        @map("error_message")
+  sourceDate   DateTime       @map("source_date") @db.Timestamptz()
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm   Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id])
+  client Client? @relation(fields: [clientId], references: [id])
+  chunks Chunk[]
+
+  @@index([firmId])
+  @@index([firmId, source])
+  @@index([firmId, clientId])
+  @@map("documents")
+}
+
+// ─── Chunks (with pgvector embedding) ────────────────
+
+model Chunk {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  firmId     String   @map("firm_id") @db.Uuid
+  clientId   String?  @map("client_id") @db.Uuid
+  chunkIndex Int      @map("chunk_index")
+  chunkText  String   @map("chunk_text")
+  // embedding stored via raw SQL — Prisma doesn't natively support vector type
+  tokenCount Int      @map("token_count")
+  metadata   Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  firm     Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client   Client?  @relation(fields: [clientId], references: [id])
+
+  @@index([firmId])
+  @@index([documentId])
+  @@map("chunks")
+}
+
+// ─── Queries (RAG chat history) ──────────────────────
+
+model Query {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId             String   @map("firm_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  clientId           String?  @map("client_id") @db.Uuid
+  queryText          String   @map("query_text")
+  responseText       String   @map("response_text")
+  retrievedChunkIds  String[] @map("retrieved_chunk_ids") @db.Uuid
+  chunksSentToLlm    Int      @map("chunks_sent_to_llm")
+  llmModel           String   @map("llm_model") @db.VarChar(50)
+  llmTokensPrompt    Int      @map("llm_tokens_prompt")
+  llmTokensCompletion Int     @map("llm_tokens_completion")
+  llmCostInr         Decimal  @map("llm_cost_inr") @db.Decimal(10, 4)
+  latencyMs          Int      @map("latency_ms")
+  retrievalLatencyMs Int      @map("retrieval_latency_ms")
+  feedback           Feedback @default(none)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm   Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id])
+  client Client? @relation(fields: [clientId], references: [id])
+
+  @@index([firmId])
+  @@index([firmId, userId])
+  @@map("queries")
+}
+
+// ─── Audit Logs ──────────────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId       String   @map("firm_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  action       String   @db.VarChar(100)
+  resourceType String   @map("resource_type") @db.VarChar(50)
+  resourceId   String?  @map("resource_id") @db.Uuid
+  details      Json?    @db.JsonB
+  ipAddress    String?  @map("ip_address") @db.Inet
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([firmId])
+  @@index([firmId, action])
+  @@map("audit_logs")
+}
+
+// ─── Sync Jobs ───────────────────────────────────────
+
+model SyncJob {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId             String     @map("firm_id") @db.Uuid
+  userId             String     @map("user_id") @db.Uuid
+  type               SyncType
+  status             SyncStatus @default(queued)
+  documentsFound     Int        @default(0) @map("documents_found")
+  documentsProcessed Int        @default(0) @map("documents_processed")
+  errorMessage       String?    @map("error_message")
+  startedAt          DateTime?  @map("started_at") @db.Timestamptz()
+  completedAt        DateTime?  @map("completed_at") @db.Timestamptz()
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([firmId])
+  @@index([firmId, userId])
+  @@map("sync_jobs")
+}

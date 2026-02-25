@@ -27,6 +27,19 @@ export interface User {
   updatedAt: Date;
 }
 
+// ─── Client ──────────────────────────────────────────
+
+export interface Client {
+  id: string;
+  firmId: string;
+  createdBy: string;
+  name: string;
+  identifier: string;
+  emailDomain?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+}
+
 // ─── Document ────────────────────────────────────────
 
 export type DocumentSource = "gmail" | "drive" | "upload";

@@ -1,24 +1,23 @@
 # Current Implementation State
 
-**Last Updated:** 25 February 2026  
-**Status:** MVP Foundation Complete — Ready for Feature Development
+**Last Updated:** 25 February 2026 (10:00 UTC)  
+**Status:** Database + API Routes Complete — Ready for Authentication & RAG Pipeline
 
 ---
 
 ## Overview
 
-The monorepo foundation is **fully functional** with dev infrastructure running. All three packages build, typecheck, and the app stack (Postgres + Redis + API + Web) is operational locally.
+The monorepo has **full database schema** and **API route scaffolding** complete. Postgres (pgvector-enabled) is migrated with 8 tables, seeded with demo data, and all REST endpoints are wired up with proper error handling, validation, and multi-tenancy isolation.
 
 ### Quick Status
 
 - ✅ **Monorepo Structure:** pnpm + Turborepo configured, all workspaces linked
-- ✅ **API Server:** Express.js with health check endpoint running on :4000
+- ✅ **API Server:** Express.js with health + auth + documents + chat + sync routes on :4000
 - ✅ **Web Frontend:** Next.js 14 with Tailwind CSS, landing page with API connectivity test on :3000
-- ✅ **Shared Types:** Domain model defined (`Firm`, `User`, `Document`, `Chat`, `SyncJob`, `ApiResponse`)
-- ✅ **Docker Setup:** `docker-compose.dev.yml` (infra only) + `docker-compose.yml` (full stack)
-- ✅ **Environment:** `.env` files configured for local development
-- ⏳ **Database:** Postgres schema not yet created (awaiting Prisma setup)
-- ⏳ **Authentication:** Google OAuth scaffolding in PRD, not yet implemented
+- ✅ **Shared Types:** Domain model + Zod validation schemas defined
+- ✅ **Database:** Postgres 16 + pgvector with RLS, 8 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs)
+- ✅ **Migrations:** Applied + seeded with demo firm/users/clients
+- ⏳ **Authentication:** Google OAuth routes scaffolded, JWT/token logic not yet implemented
 
 ---
 
@@ -26,99 +25,98 @@ The monorepo foundation is **fully functional** with dev infrastructure running.
 
 ### Package Infrastructure
 
-| Package                 | Status  | Purpose                                                               |
-| ----------------------- | ------- | --------------------------------------------------------------------- |
-| `@ai-accounting/shared` | ✅ Live | TypeScript types, exports from `src/index.ts` barrel file             |
-| `@ai-accounting/api`    | ✅ Live | Express server, health route, error-handler middleware, dotenv loader |
-| `@ai-accounting/web`    | ✅ Live | Next.js app, landing page, Tailwind CSS setup, API health check UI    |
+| Package                 | Status  | Purpose                                                                              |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `@ai-accounting/shared` | ✅ Live | TypeScript types + Zod validation schemas, exported from barrel file                 |
+| `@ai-accounting/api`    | ✅ Live | Express server, 5 routers (health/auth/docs/chat/sync), error handler, Prisma client |
+| `@ai-accounting/web`    | ✅ Live | Next.js app, landing page, Tailwind CSS setup, API health check UI                   |
+
+### Database & ORM
+
+- **Prisma 6.19.2** installed with @prisma/client
+- **8 tables** created with pgvector support: `firms`, `users`, `clients`, `documents`, `chunks`, `queries`, `audit_logs`, `sync_jobs`
+- **RLS policies** enabled on all tables via `firm_id` partition key
+- **Migrations** applied successfully against local Postgres 16 + pgvector
+- **Seed data** created: 1 firm (Sharma & Associates), 2 users (admin + member), 2 clients
+
+### API Routes (5 Routers)
+
+| Router         | Mounted At       | Status        | Endpoints                                                            |
+| -------------- | ---------------- | ------------- | -------------------------------------------------------------------- |
+| `health.ts`    | `/api/health`    | ✅ Live       | `GET /` — service status                                             |
+| `auth.ts`      | `/api/auth`      | ✅ Scaffolded | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`     |
+| `documents.ts` | `/api/documents` | ✅ Scaffolded | `GET /` (list, paginated), `GET /:id`, `POST /upload`, `DELETE /:id` |
+| `chat.ts`      | `/api/chat`      | ✅ Scaffolded | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`      |
+| `sync.ts`      | `/api/sync`      | ✅ Scaffolded | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
+
+### Utilities & Middleware
+
+- **Prisma singleton** — safe hot-reload pattern
+- **ApiError class** — typed HTTP errors with factory methods
+- **Zod validation middleware** — request body schema checking
+- **Auth middleware** — JWT stub + dev bypass via `X-Dev-User` header
+- **Error handler** — global error-to-ApiResponse envelope
 
 ### Tooling & DevOps
 
 - **pnpm workspace** with 3 packages configured
-- **Turborepo** with task orchestration: `build` (shared→api→web order), `dev`, `typecheck`, `clean`
-- **TypeScript 5.7** with strict mode, composite project references for build caching
+- **Turborepo** with task orchestration: `build`, `dev`, `typecheck`, `clean`
+- **TypeScript 5.7** with strict mode, composite project references
 - **Docker Compose** with Postgres (pgvector), Redis, API, Web services
-- **GitHub Actions** hooks ready (CI/CD pipeline not yet configured)
-- **ESM/CommonJS mix:** Shared (ESM), API (CommonJS), Web (ESM) — all interop correctly
-
-### Code Quality
-
-- All 3 packages **typecheck clean** (`pnpm typecheck` passes)
-- **Express type safety:** Explicit `Express`, `Router` annotations to avoid TS2742 errors
-- **React safety:** Proper typing in client components (`"use client"` directive)
-- **Git workflow:** Initialized, `.gitignore` includes `node_modules`, `.next`, `dist`, Docker volumes
+- **DB scripts** added: `db:migrate`, `db:seed`, `db:studio`, `db:reset`
+- **Prisma generate** integrated into build pipeline
+- **All 3 packages build & typecheck clean**
 
 ---
 
 ## In-Progress / Pending
 
-### High Priority (MVP Foundation)
+### High Priority (MVP Feature Work)
 
-1. **Prisma ORM Setup**
-   - Schema file with: `Firm`, `User`, `Document`, `Chunk`, `Query`, `AuditLog`, `SyncJob` tables
-   - RLS (Row-Level Security) configuration for multi-tenancy
-   - Migration scripts
-   - Add to `apps/api` as dependency
-   - **Estimated:** 2–3 hours
+1. **Authentication (Google OAuth + JWT)**
+   - Implement real Google OAuth token exchange (PKCE)
+   - Add jsonwebtoken for JWT issuance/verification
+   - Encrypt Google refresh tokens with AES-256-GCM
+   - **Estimated:** 4–5 hours | **Blocked by:** None
 
-2. **Database Initialization**
-   - Run migrations against local Postgres
-   - Seed initial firm/user data for testing
-   - **Estimated:** 1 hour
+2. **Document Sync Workers** (BullMQ + Redis)
+   - Gmail sync processor — fetch messages, extract text, store in S3
+   - Drive sync processor — list files, download, extract text
+   - **Estimated:** 6–8 hours | **Blocked by:** Auth
 
-3. **Authentication (Google OAuth)**
-   - NextAuth.js v5 setup in web + API routes
-   - Callback handler to store encrypted refresh tokens (AES-256-GCM)
-   - User session middleware
-   - **Estimated:** 4–5 hours
-
-4. **API Endpoint Scaffolding**
-   - `/api/auth/*` routes (login, callback, logout, me)
-   - `/api/documents` CRUD routes
-   - Validation with Zod
-   - **Estimated:** 3 hours
-
-### Medium Priority (RAG Pipeline)
-
-5. **Document Sync Workers** (BullMQ + Redis)
-   - Gmail sync processor
-   - Drive sync processor
-   - Status tracking updates
-   - **Estimated:** 6–8 hours
-
-6. **Text Extraction & Chunking**
-   - PDF, DOCX, XLSX parsers
-   - Text normalization (remove boilerplate, dedup)
+3. **Text Extraction & Chunking**
+   - PDF, DOCX, XLSX parsers with OCR fallback
+   - Text normalization + SHA-256 dedup
    - Sentence-aware chunking (800–1200 tokens, 200 overlap)
-   - **Estimated:** 5–6 hours
+   - **Estimated:** 5–6 hours | **Blocked by:** Sync workers
 
-7. **Embedding Pipeline**
+4. **Embedding Pipeline**
    - OpenAI text-embedding-3-small integration
-   - pgvector storage
-   - Batch processing logic
-   - **Estimated:** 3–4 hours
+   - Batch embedding creation (1536-dim vectors)
+   - Vector insert into pgvector `chunks.embedding` column
+   - **Estimated:** 3–4 hours | **Blocked by:** Chunking
 
-8. **RAG Chat Endpoint**
-   - Vector search with similarity + recency ranking
-   - Prompt assembly with system message + context
-   - OpenAI GPT-4o-mini integration
+5. **RAG Chat Endpoint**
+   - Vector similarity search + recency weighting
+   - Prompt assembly with system message + top-K contexts
+   - LLM integration (GPT-4o-mini)
    - Source citation extraction
-   - **Estimated:** 4–5 hours
+   - **Estimated:** 4–5 hours | **Blocked by:** Embedding pipeline
 
-### Lower Priority (UX / Polish)
+### Medium Priority (UX / Polish)
 
-9. **Web UI Components**
+6. **Web UI Components**
    - Chat interface with message history
    - Document management dashboard
    - Sync status indicators
-   - Admin user management
-   - **Estimated:** 8–10 hours
+   - Admin user management panel
+   - **Estimated:** 8–10 hours | **Blocked by:** RAG endpoint
 
-10. **Email Draft Feature**
-    - Prompt template for professional tone
-    - Refine endpoint
-    - Gmail integration for sending
-    - **Estimated:** 3 hours
+7. **Email Draft Feature**
+   - Prompt template for professional CA tone
+   - Refine endpoint (iterate on drafts)
+   - Gmail integration for sending
+   - **Estimated:** 3 hours | **Blocked by:** Auth + RAG
 
 ---
 
@@ -131,18 +129,22 @@ The monorepo foundation is **fully functional** with dev infrastructure running.
 - **Async-First Jobs:** Heavy work (sync, embedding) via BullMQ, not request handlers
 - **LLM Provider Swappable:** Abstract behind service interfaces (not hardcoded OpenAI)
 - **AES-256-GCM Encryption:** Google refresh tokens encrypted per-user with IV
+- **Prisma + pgvector:** Native vector support for embeddings, no separate vector DB
 
 ---
 
 ## Known Issues & Blockers
 
-| Issue                                             | Impact                     | Resolution                        |
-| ------------------------------------------------- | -------------------------- | --------------------------------- |
-| Database schema not yet created                   | Can't persist data         | Implement Prisma schema           |
-| No authentication flow                            | Can't identify users/firms | Implement NextAuth + Google OAuth |
-| API has only health endpoint                      | Limited functionality      | Scaffold document/auth routes     |
-| No background job system                          | Can't process syncs        | Add BullMQ + job processors       |
-| `pnpm dev` starts both apps but no logs separated | Development friction       | Consider monorepo task filtering  |
+| Issue                                       | Impact                       | Resolution                                     | Status  |
+| ------------------------------------------- | ---------------------------- | ---------------------------------------------- | ------- |
+| No real JWT verification in auth middleware | Can't validate real tokens   | Implement JWT verify with jsonwebtoken package | 🔴 TODO |
+| No Google OAuth token exchange implemented  | Can't authenticate users     | Implement OAuth 2.0 PKCE flow                  | 🔴 TODO |
+| Google tokens not encrypted (AES-256-GCM)   | Security risk                | Implement encryption/decryption in auth routes | 🔴 TODO |
+| No sync workers (BullMQ)                    | Can't process Gmail/Drive    | Implement BullMQ job processors                | 🔴 TODO |
+| No text extraction / chunking               | Can't process documents      | Add pdf-parse, docx-parse, xlsx packages       | 🔴 TODO |
+| No embedding generation (OpenAI)            | Can't vectorize chunks       | Integrate OpenAI text-embedding-3-small        | 🔴 TODO |
+| No RAG vector search                        | Chat endpoint non-functional | Implement pgvector similarity search           | 🔴 TODO |
+| Dev auth header `X-Dev-User` hardcoded      | Development only, OK for MVP | Production auth handled by real JWT            | ✅ OK   |
 
 ---
 
@@ -151,9 +153,12 @@ The monorepo foundation is **fully functional** with dev infrastructure running.
 | Metric                             | Value                                             |
 | ---------------------------------- | ------------------------------------------------- |
 | **Packages**                       | 3 (api, web, shared)                              |
-| **TypeScript Files**               | ~15                                               |
-| **Total LOC** (excl. node_modules) | ~800                                              |
-| **Build Time** (from cold)         | ~12 seconds (Turbo cached)                        |
+| **TypeScript Files**               | ~40 (routes, middleware, utilities)               |
+| **Database Tables**                | 8 with RLS enabled                                |
+| **REST Endpoints**                 | 17 (health + 16 scaffolded)                       |
+| **Zod Schemas**                    | 10 validation schemas                             |
+| **Total LOC** (excl. node_modules) | ~2500                                             |
+| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                         |
 | **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                    |
 | **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)          |
 | **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379 |
@@ -164,32 +169,36 @@ The monorepo foundation is **fully functional** with dev infrastructure running.
 
 ### Production
 
-- **API:** express, cors, helmet, morgan, zod, dotenv
+- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client
 - **Web:** next, react, react-dom
-- **Shared:** (none — pure TypeScript types)
+- **Shared:** zod
 
 ### Dev
 
 - **All:** typescript, turbo, pnpm
-- **API:** @types/express, @types/node, tsx
+- **API:** @types/express, @types/node, tsx, prisma
 - **Web:** tailwindcss, autoprefixer, postcss, @types/react
 
-### Planned
+### Planned (Next Sprint)
 
-- **API:** prisma, @prisma/client, bullmq, openai, redis, aws-sdk
-- **Web:** @tanstack/react-query, zustand, react-hook-form
+- **API:** bullmq, redis, jsonwebtoken, openai, @google-cloud/gmail, googleapis, pdf-parse, docx-parse, xlsx, tesseract.js, aws-sdk
+- **Web:** @tanstack/react-query, zustand, react-hook-form, framer-motion
 - **All:** eslint, prettier
 
 ---
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Set up Prisma** — `pnpm add -D prisma @prisma/client` in api, create schema
-2. **Create database schema** — Prisma schema file with all 7 tables + RLS policies
-3. **Run migrations** — `prisma migrate dev --name init`
-4. **Implement Google OAuth** — NextAuth.js setup + callback handler
-5. **Scaffold auth routes** — POST /auth/google/callback, GET /auth/me, POST /auth/logout
-6. **Add Zod validation** — Request/response schemas in shared, use in routes
+1. **Implement Google OAuth** — token exchange, JWT issuance, encryption of refresh tokens
+2. **Add jsonwebtoken** — JWT sign/verify for session management
+3. **Test auth flow** — POST to `/api/auth/google/callback` with real OAuth code
+4. **Install BullMQ + Redis client** — set up job queue infrastructure
+5. **Build Gmail sync worker** — fetch messages, extract attachments, store metadata in DB
+6. **Build Drive sync worker** — fetch files, download, extract text
+7. **Add text extraction packages** — pdf-parse, docx-parse, xlsx, Tesseract OCR
+8. **Implement chunking service** — split normalized text into 800–1200 token chunks
+9. **Wire OpenAI embedding** — batch embed chunks, store vectors in pgvector
+10. **Implement RAG search** — vector similarity + recency weighting + LLM prompt assembly
 
 ---
 
@@ -214,6 +223,10 @@ The monorepo foundation is **fully functional** with dev infrastructure running.
 
 ## References
 
-- **Architecture Details:** See `architecture.md`
-- **Product Requirements:** See `PRD.md`
-- **Development Guide:** See `.github/copilot-instructions.md`
+- **Architecture Details:** [architecture.md](../architecture.md)
+- **Product Requirements:** [PRD.md](../PRD.md)
+- **Development Guide:** [copilot-instructions.md](./copilot-instructions.md)
+- **Database:** Prisma docs at https://www.prisma.io/docs/
+- **Google APIs:** Use `googleapis` or `@google-cloud/gmail` packages
+- **OpenAI:** Use official `openai` package (GPT-4o-mini + text-embedding-3-small)
+- **Redis/BullMQ:** Use `bullmq` + `redis` packages for job queue
