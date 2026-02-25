@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 25 February 2026 (10:00 UTC)  
-**Status:** Database + API Routes Complete — Ready for Authentication & RAG Pipeline
+**Last Updated:** 25 February 2026 (16:00 UTC)  
+**Status:** BullMQ Sync Workers Complete — Ready for Text Extraction & Chunking
 
 ---
 
@@ -17,7 +17,9 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - ✅ **Shared Types:** Domain model + Zod validation schemas defined
 - ✅ **Database:** Postgres 16 + pgvector with RLS, 8 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs)
 - ✅ **Migrations:** Applied + seeded with demo firm/users/clients
-- ⏳ **Authentication:** Google OAuth routes scaffolded, JWT/token logic not yet implemented
+- ✅ **Authentication:** Google OAuth + JWT fully wired; AES-256-GCM refresh token encryption in place
+- ✅ **Vitest Test Suite:** 71 tests passing (auth lib, auth middleware, Zod schemas)
+- ✅ **BullMQ Sync Workers:** Gmail + Drive workers wired end-to-end; jobs enqueued, processed, DB status updated
 
 ---
 
@@ -44,18 +46,52 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 | Router         | Mounted At       | Status        | Endpoints                                                            |
 | -------------- | ---------------- | ------------- | -------------------------------------------------------------------- |
 | `health.ts`    | `/api/health`    | ✅ Live       | `GET /` — service status                                             |
-| `auth.ts`      | `/api/auth`      | ✅ Scaffolded | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`     |
+| `auth.ts`      | `/api/auth`      | ✅ Live       | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`     |
 | `documents.ts` | `/api/documents` | ✅ Scaffolded | `GET /` (list, paginated), `GET /:id`, `POST /upload`, `DELETE /:id` |
 | `chat.ts`      | `/api/chat`      | ✅ Scaffolded | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`      |
-| `sync.ts`      | `/api/sync`      | ✅ Scaffolded | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
+| `sync.ts`      | `/api/sync`      | ✅ Live        | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
 
 ### Utilities & Middleware
 
 - **Prisma singleton** — safe hot-reload pattern
 - **ApiError class** — typed HTTP errors with factory methods
 - **Zod validation middleware** — request body schema checking
-- **Auth middleware** — JWT stub + dev bypass via `X-Dev-User` header
+- **Auth middleware** — real JWT verification + dev bypass via `X-Dev-User` header
 - **Error handler** — global error-to-ApiResponse envelope
+
+### Vitest Test Suite
+
+- **`packages/shared/vitest.config.ts`** + **`apps/api/vitest.config.ts`** — Vitest configured in both packages
+- **`packages/shared/src/schemas.test.ts`** — 38 tests covering all 6 Zod schemas (valid, defaults, coercion, boundary values)
+- **`apps/api/src/lib/auth.test.ts`** — 22 tests for `encrypt`/`decrypt`, `signJwt`/`verifyJwt`, `buildGoogleAuthUrl`
+- **`apps/api/src/middleware/auth.test.ts`** — 11 tests for `requireAuth` (dev bypass, JWT, expired) and `requireAdmin` (roles)
+- **`turbo.json`** — `test` task added with `dependsOn: ["^build"]`
+- **Total: 71 tests, all green**
+
+### BullMQ Sync Workers
+
+- **`apps/api/src/lib/redis.ts`** — ioredis singleton with `maxRetriesPerRequest: null` (required by BullMQ); separate `getRedisSubscriber()` for pub/sub
+- **`apps/api/src/queues/sync.queue.ts`** — `syncQueue` (BullMQ Queue), `addGmailSyncJob()` + `addDriveSyncJob()` helpers; BullMQ Job ID = DB SyncJob UUID for direct correlation; 3 retry attempts with exponential backoff
+- **`apps/api/src/workers/gmail-sync.worker.ts`** — full Gmail processor: decrypts refresh token → OAuth2 client → `messages.list` → extract text from MIME parts → SHA-256 hash → `document.upsert` → updates SyncJob status (running → completed/failed)
+- **`apps/api/src/workers/drive-sync.worker.ts`** — full Drive processor: same DB tracking pattern → `files.list` with MIME type filter → `files.get` media stream → hash → Document upsert with `s3Key` placeholder
+- **`apps/api/src/routes/sync.ts`** — updated `POST /gmail` and `POST /drive` to enqueue BullMQ jobs after creating DB SyncJob record; returns `{ jobId, bullJobId, type, status }`
+- **`apps/api/src/index.ts`** — calls `startGmailSyncWorker()` + `startDriveSyncWorker()` on server boot
+
+### Authentication
+
+- **`src/lib/auth.ts`** — core auth service:
+  - `buildGoogleAuthUrl()` — generates OAuth consent URL with offline access + email/profile/gmail/drive scopes
+  - `exchangeCodeForTokens()` — exchanges authorization code for Google access + refresh tokens
+  - `fetchGoogleProfile()` — fetches email, name, picture from Google userinfo API
+  - `encrypt()` / `decrypt()` — AES-256-GCM with random 12-byte IV per token, stored as base64
+  - `signJwt()` / `verifyJwt()` — JWT session tokens (15m expiry, issuer + audience validated)
+- **`src/routes/auth.ts`** — full OAuth flow:
+  - `GET /google` → redirects to Google consent screen
+  - `GET /google/callback` → exchanges code, upserts User+Firm in DB, issues JWT, redirects to frontend
+  - `POST /logout` → stateless (JWT dropped client-side; Redis blacklist planned)
+  - `GET /me` → returns full user + firm from DB
+- **`.env`** — `JWT_SECRET` (64-byte) and `ENCRYPTION_KEY` (32-byte) generated and in place
+- **`.env.example`** — updated with generation commands and inline documentation
 
 ### Tooling & DevOps
 
@@ -73,30 +109,19 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### High Priority (MVP Feature Work)
 
-1. **Authentication (Google OAuth + JWT)**
-   - Implement real Google OAuth token exchange (PKCE)
-   - Add jsonwebtoken for JWT issuance/verification
-   - Encrypt Google refresh tokens with AES-256-GCM
-   - **Estimated:** 4–5 hours | **Blocked by:** None
-
-2. **Document Sync Workers** (BullMQ + Redis)
-   - Gmail sync processor — fetch messages, extract text, store in S3
-   - Drive sync processor — list files, download, extract text
-   - **Estimated:** 6–8 hours | **Blocked by:** Auth
-
-3. **Text Extraction & Chunking**
+1. **Text Extraction & Chunking** ← **CURRENT PRIORITY**
    - PDF, DOCX, XLSX parsers with OCR fallback
    - Text normalization + SHA-256 dedup
    - Sentence-aware chunking (800–1200 tokens, 200 overlap)
-   - **Estimated:** 5–6 hours | **Blocked by:** Sync workers
+   - **Estimated:** 5–6 hours | **Blocked by:** ~~Sync workers~~ ✅
 
-4. **Embedding Pipeline**
+2. **Embedding Pipeline**
    - OpenAI text-embedding-3-small integration
    - Batch embedding creation (1536-dim vectors)
    - Vector insert into pgvector `chunks.embedding` column
    - **Estimated:** 3–4 hours | **Blocked by:** Chunking
 
-5. **RAG Chat Endpoint**
+3. **RAG Chat Endpoint**
    - Vector similarity search + recency weighting
    - Prompt assembly with system message + top-K contexts
    - LLM integration (GPT-4o-mini)
@@ -135,16 +160,12 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Known Issues & Blockers
 
-| Issue                                       | Impact                       | Resolution                                     | Status  |
-| ------------------------------------------- | ---------------------------- | ---------------------------------------------- | ------- |
-| No real JWT verification in auth middleware | Can't validate real tokens   | Implement JWT verify with jsonwebtoken package | 🔴 TODO |
-| No Google OAuth token exchange implemented  | Can't authenticate users     | Implement OAuth 2.0 PKCE flow                  | 🔴 TODO |
-| Google tokens not encrypted (AES-256-GCM)   | Security risk                | Implement encryption/decryption in auth routes | 🔴 TODO |
-| No sync workers (BullMQ)                    | Can't process Gmail/Drive    | Implement BullMQ job processors                | 🔴 TODO |
-| No text extraction / chunking               | Can't process documents      | Add pdf-parse, docx-parse, xlsx packages       | 🔴 TODO |
-| No embedding generation (OpenAI)            | Can't vectorize chunks       | Integrate OpenAI text-embedding-3-small        | 🔴 TODO |
-| No RAG vector search                        | Chat endpoint non-functional | Implement pgvector similarity search           | 🔴 TODO |
-| Dev auth header `X-Dev-User` hardcoded      | Development only, OK for MVP | Production auth handled by real JWT            | ✅ OK   |
+| Issue                                  | Impact                       | Resolution                               | Status  |
+| -------------------------------------- | ---------------------------- | ---------------------------------------- | ------- |
+| No text extraction / chunking          | Can't process documents      | Add pdf-parse, docx-parse, xlsx packages | 🔴 TODO |
+| No embedding generation (OpenAI)       | Can't vectorize chunks       | Integrate OpenAI text-embedding-3-small  | 🔴 TODO |
+| No RAG vector search                   | Chat endpoint non-functional | Implement pgvector similarity search     | 🔴 TODO |
+| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP | Production auth handled by real JWT      | ✅ OK   |
 
 ---
 
@@ -169,19 +190,19 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### Production
 
-- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client
+- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client, jsonwebtoken, googleapis, bullmq, ioredis
 - **Web:** next, react, react-dom
 - **Shared:** zod
 
 ### Dev
 
 - **All:** typescript, turbo, pnpm
-- **API:** @types/express, @types/node, tsx, prisma
+- **API:** @types/express, @types/node, @types/jsonwebtoken, tsx, prisma
 - **Web:** tailwindcss, autoprefixer, postcss, @types/react
 
 ### Planned (Next Sprint)
 
-- **API:** bullmq, redis, jsonwebtoken, openai, @google-cloud/gmail, googleapis, pdf-parse, docx-parse, xlsx, tesseract.js, aws-sdk
+- **API:** openai, pdf-parse, mammoth, xlsx, tesseract.js
 - **Web:** @tanstack/react-query, zustand, react-hook-form, framer-motion
 - **All:** eslint, prettier
 
@@ -189,16 +210,16 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Implement Google OAuth** — token exchange, JWT issuance, encryption of refresh tokens
-2. **Add jsonwebtoken** — JWT sign/verify for session management
-3. **Test auth flow** — POST to `/api/auth/google/callback` with real OAuth code
-4. **Install BullMQ + Redis client** — set up job queue infrastructure
-5. **Build Gmail sync worker** — fetch messages, extract attachments, store metadata in DB
-6. **Build Drive sync worker** — fetch files, download, extract text
-7. **Add text extraction packages** — pdf-parse, docx-parse, xlsx, Tesseract OCR
-8. **Implement chunking service** — split normalized text into 800–1200 token chunks
-9. **Wire OpenAI embedding** — batch embed chunks, store vectors in pgvector
-10. **Implement RAG search** — vector similarity + recency weighting + LLM prompt assembly
+1. **Install text extraction packages** — `pdf-parse`, `mammoth` (DOCX), `xlsx`; add `@types/pdf-parse`
+2. **Create `src/lib/extractor.ts`** — handles PDF → text, DOCX → text, XLSX → text/CSV, plain text pass-through; SHA-256 hash of content
+3. **Create `src/lib/chunker.ts`** — sentence-aware chunking (800–1200 tokens, 200-token overlap), returns `{ chunkText, tokenCount, chunkIndex }[]`
+4. **Integrate extraction into Gmail worker** — after `document.upsert` with `status: "pending"`, call extractor → chunker → insert rows into `chunks` table → set doc `status: "ready"`
+5. **Integrate extraction into Drive worker** — same pipeline after downloading file content
+6. **Install openai package** — add `OPENAI_API_KEY` to `.env.example`
+7. **Create `src/lib/embedder.ts`** — batches chunks (100/call), calls `text-embedding-3-small` (1536 dims), stores vectors via raw SQL `UPDATE chunks SET embedding = $1::vector`
+8. **Call embedder at end of extraction pipeline** — chunks inserted → batched embed → vectors stored
+9. **Implement RAG vector search** — pgvector cosine similarity + recency weighting (`score = similarity × 1/(1 + age_days/365)`), top-K=8, threshold 0.72
+10. **Wire `POST /api/chat`** — embed query → vector search → prompt assembly → GPT-4o-mini → store Query record with citations
 
 ---
 

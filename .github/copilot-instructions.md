@@ -29,9 +29,15 @@ pnpm db:reset                                     # Drop + migrate + seed (caref
 # Full Docker stack (all services containerized)
 docker compose up --build
 
-# Build/check everything via Turborepo
+# Build/check/test everything via Turborepo
 pnpm build        # builds shared → api → web (dependency order)
 pnpm typecheck    # type-checks all packages
+pnpm test         # runs Vitest suites in api + shared (after build)
+
+# Per-package testing
+pnpm --filter @ai-accounting/api test          # run once
+pnpm --filter @ai-accounting/api test:watch    # watch mode
+pnpm --filter @ai-accounting/shared test       # schemas only
 ```
 
 **Critical build order:** `@ai-accounting/shared` must build first — the API references it via `tsconfig.json` project references (`"composite": true`). Turborepo handles this via `"dependsOn": ["^build"]`. Prisma client generation also runs as part of the API build step.
@@ -43,8 +49,12 @@ pnpm typecheck    # type-checks all packages
 - **Entry:** `src/index.ts` loads dotenv → imports `src/app.ts` → listens on PORT
 - **Routes:** Each feature gets a dedicated router in `src/routes/` — export a typed `Router` and mount in `app.ts` under `/api/<feature>`
 - **Middleware:** Place in `src/middleware/` — see `error-handler.ts` for the standard `ApiResponse` error envelope
+- **Auth service:** `src/lib/auth.ts` owns all OAuth, JWT, and AES-256-GCM logic — import from there, never inline crypto
+- **Prisma client:** `src/lib/prisma.ts` exports a **named** `{ prisma }` singleton — always use `import { prisma } from "../lib/prisma"` (not default import)
 - **Type annotations:** Always add explicit types on exported Express objects (`Router`, `Express`) to avoid TS2742 portable-type errors
 - **Validation:** Use `zod` for request validation; schemas should live in `@ai-accounting/shared` when used by both apps
+- **Error propagation:** All route handlers must use `next(err)` — never `throw` inside an Express handler directly
+- **Tests:** Vitest unit tests live alongside source files as `*.test.ts`. Run `pnpm test` from the package root. Test files use `vi.fn()` for mocks and `beforeEach`/`afterEach` to clean env vars — never leak env state between tests.
 
 ### Web (`apps/web`)
 
@@ -60,6 +70,7 @@ pnpm typecheck    # type-checks all packages
 - **Schemas file** (`src/schemas.ts`) — Zod validation schemas for all API requests/responses
 - Use `── Section ──` comment separators to group related types
 - All API responses wrap in `ApiResponse<T>` or `PaginatedResponse<T>` — follow this pattern for every new endpoint
+- **Tests:** `src/schemas.test.ts` covers all Zod schemas — add a test case whenever a new schema is added
 
 ## Multi-Tenancy
 
@@ -72,11 +83,34 @@ Every data-bearing entity **must** include `firmId: string`. Database queries wi
 - **Env files:** `apps/api/.env` (copy from `.env.example`), `apps/web/.env.local`
 - Database host differs: `localhost` in local dev, `postgres` inside Docker network
 
+## Keeping Documentation Current
+
+**After every major feature or milestone, update `.github/currentState.md`** to reflect the new state of the project. This file is the single source of truth for what is built, what is pending, and what the next steps are.
+
+**What counts as a major update:**
+
+- A feature phase completes (e.g., auth, sync workers, RAG pipeline, Web UI)
+- New packages or libraries are installed
+- A new route, middleware, or service is added
+- Database schema changes (new models, migrations)
+- Known issues are resolved or newly discovered
+- The "Next Immediate Steps" order changes
+
+**What to update in `currentState.md`:**
+
+1. **Status header** — bump the "Last Updated" timestamp and the summary status line
+2. **Quick Status** — flip ⏳ → ✅ for completed items
+3. **Completed Work** — add a new subsection documenting the files created/modified and their key exports
+4. **API Routes table** — update Status column from `✅ Scaffolded` → `✅ Live` when implemented
+5. **Known Issues table** — remove resolved rows; add any newly discovered blockers
+6. **Dependencies** — move newly installed packages from "Planned" to "Production" or "Dev"
+7. **Next Immediate Steps** — rewrite the ordered list to reflect what is actually next
+
 ## Key Decisions (see also `architecture.md`)
 
 - **LLM provider is swappable** — abstract behind adapter interfaces, don't hardcode OpenAI
 - **Google OAuth tokens encrypted** with AES-256-GCM (per-user IV), key from env
 - **Background jobs** will use BullMQ + Redis — heavy work (sync, embedding) must never block API request threads
 - **Prisma + pgvector** for database + vector storage — no separate vector DB needed
-- **Auth middleware stub** in dev mode uses `X-Dev-User` header (override with real JWT in production)
+- **Auth middleware** in dev mode uses `X-Dev-User` header as JSON bypass; production uses real JWT verification via `jsonwebtoken`
 - **Multi-tenancy** via `firm_id` on every table with RLS policies enforced at DB level

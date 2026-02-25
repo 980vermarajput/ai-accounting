@@ -1,56 +1,123 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import type { ApiResponse } from "@ai-accounting/shared";
 import { requireAuth } from "../middleware/auth";
+import {
+  buildGoogleAuthUrl,
+  exchangeCodeForTokens,
+  fetchGoogleProfile,
+  encrypt,
+  signJwt,
+} from "../lib/auth";
+import { prisma } from "../lib/prisma";
 
 export const authRouter: Router = Router();
 
 // ─── GET /api/auth/google — redirect to Google OAuth consent ─────
-authRouter.get("/google", (_req: Request, res: Response) => {
-  // TODO: build Google OAuth URL with PKCE, scopes = gmail.readonly + drive.readonly
-  const response: ApiResponse = {
-    success: false,
-    error: {
-      code: "NOT_IMPLEMENTED",
-      message: "Google OAuth redirect not yet implemented",
-    },
-  };
-  res.status(501).json(response);
+authRouter.get("/google", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const url = buildGoogleAuthUrl();
+    res.redirect(url);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ─── GET /api/auth/google/callback — exchange code for tokens ────
-authRouter.get("/google/callback", async (req: Request, res: Response) => {
-  const { code } = req.query;
+authRouter.get(
+  "/google/callback",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { code, error } = req.query;
+      const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
 
-  if (!code || typeof code !== "string") {
-    const response: ApiResponse = {
-      success: false,
-      error: { code: "BAD_REQUEST", message: "Missing authorization code" },
-    };
-    res.status(400).json(response);
-    return;
-  }
+      // User denied access on Google consent screen
+      if (error) {
+        return res.redirect(`${frontendUrl}/auth/error?reason=access_denied`);
+      }
 
-  // TODO:
-  // 1. Exchange code for access + refresh tokens
-  // 2. Fetch user profile from Google
-  // 3. Upsert user in DB (find or create firm)
-  // 4. Encrypt refresh token with AES-256-GCM
-  // 5. Issue JWT session token
-  // 6. Redirect to frontend with token
+      if (!code || typeof code !== "string") {
+        return res.redirect(`${frontendUrl}/auth/error?reason=missing_code`);
+      }
 
-  const response: ApiResponse = {
-    success: false,
-    error: {
-      code: "NOT_IMPLEMENTED",
-      message: "OAuth callback not yet implemented",
-    },
-  };
-  res.status(501).json(response);
-});
+      // 1. Exchange code for Google tokens
+      const googleTokens = await exchangeCodeForTokens(code);
+
+      // 2. Fetch user profile from Google
+      const profile = await fetchGoogleProfile(googleTokens.accessToken);
+
+      // 3. Encrypt refresh token before storing
+      const encryptedRefreshToken = encrypt(googleTokens.refreshToken);
+
+      // 4. Upsert user — find by email, or create with a new firm
+      let user = await prisma.user.findUnique({
+        where: { email: profile.email },
+        include: { firm: true },
+      });
+
+      if (!user) {
+        // First-ever login — create a new firm + user together
+        const slug = profile.email
+          .split("@")[0]
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "-");
+
+        // Ensure slug uniqueness by appending a short random suffix if needed
+        const uniqueSlug = `${slug}-${Date.now().toString(36)}`;
+
+        const newFirm = await prisma.firm.create({
+          data: {
+            name: `${profile.name}'s Firm`,
+            slug: uniqueSlug,
+            users: {
+              create: {
+                email: profile.email,
+                name: profile.name,
+                role: "admin",
+                googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+              },
+            },
+          },
+          include: { users: true },
+        });
+
+        user = await prisma.user.findUnique({
+          where: { email: profile.email },
+          include: { firm: true },
+        });
+
+        if (!user) throw new Error("Failed to create user after firm creation");
+      } else {
+        // Returning user — update their refresh token
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+            lastSyncAt: null,
+          },
+        });
+      }
+
+      // 5. Issue JWT
+      const token = signJwt({
+        userId: user.id,
+        firmId: user.firmId,
+        email: user.email,
+        role: user.role as "admin" | "member",
+      });
+
+      // 6. Redirect to frontend with token in query param
+      //    Frontend stores it in memory / localStorage
+      res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // ─── POST /api/auth/logout — revoke session ─────────────────────
 authRouter.post("/logout", requireAuth, (_req: Request, res: Response) => {
-  // TODO: invalidate JWT (add to blacklist in Redis) / clear refresh token
+  // JWT is stateless — client drops the token.
+  // Full blacklisting via Redis will be added in a later phase.
   const response: ApiResponse = {
     success: true,
     data: { message: "Logged out successfully" },
@@ -59,15 +126,36 @@ authRouter.post("/logout", requireAuth, (_req: Request, res: Response) => {
 });
 
 // ─── GET /api/auth/me — return current user + firm info ─────────
-authRouter.get("/me", requireAuth, (req: Request, res: Response) => {
-  const response: ApiResponse = {
-    success: true,
-    data: {
-      userId: req.user!.userId,
-      firmId: req.user!.firmId,
-      email: req.user!.email,
-      role: req.user!.role,
-    },
-  };
-  res.json(response);
-});
+authRouter.get(
+  "/me",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          lastSyncAt: true,
+          firm: {
+            select: { id: true, name: true, slug: true, plan: true },
+          },
+        },
+      });
+
+      if (!user) {
+        return next(new Error("User not found"));
+      }
+
+      const response: ApiResponse = {
+        success: true,
+        data: user,
+      };
+      res.json(response);
+    } catch (err) {
+      next(err);
+    }
+  },
+);

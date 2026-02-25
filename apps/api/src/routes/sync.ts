@@ -7,6 +7,7 @@ import type {
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { ApiError } from "../lib/api-error";
+import { gmailSyncQueue, driveSyncQueue } from "../queues/sync.queue";
 
 export const syncRouter: Router = Router();
 
@@ -18,7 +19,8 @@ syncRouter.post(
   "/gmail",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const job = await prisma.syncJob.create({
+      // 1. Create a DB record so the client can poll /status
+      const syncJob = await prisma.syncJob.create({
         data: {
           firmId: req.user!.firmId,
           userId: req.user!.userId,
@@ -27,11 +29,25 @@ syncRouter.post(
         },
       });
 
-      // TODO: add to BullMQ queue for async processing
+      // 2. Enqueue the BullMQ job — worker picks it up asynchronously
+      const bullJob = await gmailSyncQueue.add(
+        "gmail-sync",
+        {
+          userId: req.user!.userId,
+          firmId: req.user!.firmId,
+          syncJobId: syncJob.id,
+        },
+        { jobId: syncJob.id }, // use syncJob.id as the BullMQ job id for easy correlation
+      );
 
       const response: ApiResponse = {
         success: true,
-        data: { jobId: job.id, type: "gmail", status: "queued" },
+        data: {
+          jobId: syncJob.id,
+          bullJobId: bullJob.id,
+          type: "gmail",
+          status: "queued",
+        },
       };
       res.status(202).json(response);
     } catch (err) {
@@ -45,7 +61,8 @@ syncRouter.post(
   "/drive",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const job = await prisma.syncJob.create({
+      // 1. Create a DB record
+      const syncJob = await prisma.syncJob.create({
         data: {
           firmId: req.user!.firmId,
           userId: req.user!.userId,
@@ -54,11 +71,25 @@ syncRouter.post(
         },
       });
 
-      // TODO: add to BullMQ queue for async processing
+      // 2. Enqueue the BullMQ job
+      const bullJob = await driveSyncQueue.add(
+        "drive-sync",
+        {
+          userId: req.user!.userId,
+          firmId: req.user!.firmId,
+          syncJobId: syncJob.id,
+        },
+        { jobId: syncJob.id },
+      );
 
       const response: ApiResponse = {
         success: true,
-        data: { jobId: job.id, type: "drive", status: "queued" },
+        data: {
+          jobId: syncJob.id,
+          bullJobId: bullJob.id,
+          type: "drive",
+          status: "queued",
+        },
       };
       res.status(202).json(response);
     } catch (err) {

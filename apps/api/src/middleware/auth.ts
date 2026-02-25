@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { ApiError } from "../lib/api-error";
+import { verifyJwt } from "../lib/auth";
 
 /**
  * Authenticated user payload attached to req after JWT verification.
- * Extends Express Request via declaration merging (see types/express.d.ts).
  */
 export interface AuthUser {
   userId: string;
@@ -22,10 +22,9 @@ declare global {
 }
 
 /**
- * Stub auth middleware — will be replaced with real JWT verification
- * once Google OAuth is wired up. For now reads a header.
+ * Auth middleware — verifies JWT from Authorization header.
  *
- * In development, pass `X-Dev-User` header as JSON to bypass auth:
+ * Dev shortcut: pass `X-Dev-User` header as JSON to bypass JWT:
  *   X-Dev-User: {"userId":"...","firmId":"...","email":"...","role":"admin"}
  */
 export function requireAuth(
@@ -41,19 +40,26 @@ export function requireAuth(
         req.user = JSON.parse(devHeader) as AuthUser;
         return next();
       } catch {
-        // fall through
+        // fall through to real JWT check
       }
     }
   }
 
-  // ── Real JWT check (TODO: implement with jsonwebtoken) ──
+  // ── Real JWT verification ──
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    throw ApiError.unauthorized("Missing or invalid Authorization header");
+    return next(
+      ApiError.unauthorized("Missing or invalid Authorization header"),
+    );
   }
 
-  // TODO: verify JWT, extract payload, set req.user
-  throw ApiError.unauthorized("JWT verification not yet implemented");
+  const token = authHeader.slice(7); // strip "Bearer "
+  try {
+    req.user = verifyJwt(token);
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 /**
@@ -65,7 +71,7 @@ export function requireAdmin(
   next: NextFunction,
 ): void {
   if (req.user?.role !== "admin") {
-    throw ApiError.forbidden("Admin access required");
+    return next(ApiError.forbidden("Admin access required"));
   }
   next();
 }
