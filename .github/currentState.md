@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 25 February 2026 (17:30 UTC)  
-**Status:** Text Extraction & Chunking Complete — Ready for Embedding Pipeline
+**Last Updated:** 25 February 2026 (18:30 UTC)  
+**Status:** Embedding Pipeline Complete — Ready for RAG Chat Endpoint
 
 ---
 
@@ -21,6 +21,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - ✅ **Vitest Test Suite:** 71 tests passing (auth lib, auth middleware, Zod schemas)
 - ✅ **BullMQ Sync Workers:** Gmail + Drive workers wired end-to-end; jobs enqueued, processed, DB status updated
 - ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + sentence-aware chunking; extraction worker wired end-to-end
+- ✅ **Embedding Pipeline:** OpenAI text-embedding-3-small; batch embedding worker wired end-to-end; vectors stored via raw SQL into pgvector
 
 ---
 
@@ -66,8 +67,19 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - **`packages/shared/src/schemas.test.ts`** — 38 tests covering all 6 Zod schemas (valid, defaults, coercion, boundary values)
 - **`apps/api/src/lib/auth.test.ts`** — 22 tests for `encrypt`/`decrypt`, `signJwt`/`verifyJwt`, `buildGoogleAuthUrl`
 - **`apps/api/src/middleware/auth.test.ts`** — 11 tests for `requireAuth` (dev bypass, JWT, expired) and `requireAdmin` (roles)
+- **`apps/api/src/lib/chunker.test.ts`** — 11 tests for `chunkText` (empty input, sequential index, token cap, overlap, infinite-loop guard)
+- **`apps/api/src/lib/extractor.test.ts`** — 13 tests for `extractText` (plain text, CRLF, XLSX, DOCX error-handling, textHash determinism)
+- **`apps/api/src/lib/embedder.test.ts`** — 8 tests for `embedChunks` (empty input, batch size 100, 150-chunk split, order preservation, API call shape, error propagation) — OpenAI mocked via `vi.hoisted` + `vi.mock`
 - **`turbo.json`** — `test` task added with `dependsOn: ["^build"]`
-- **Total: 71 tests, all green**
+- **Total: 95 tests, all green** (65 API + 30 shared)
+
+### Embedding Pipeline
+
+- **`apps/api/src/lib/embedder.ts`** — `embedChunks(chunks)` batches up to 100 items/call to `text-embedding-3-small` (1536 dims); lazy OpenAI client instantiated on first use; returns `{ chunkId, embedding }[]`; constants `EMBEDDING_MODEL` + `EMBEDDING_DIMENSIONS` exported for reuse
+- **`apps/api/src/queues/embedding.queue.ts`** — `embeddingQueue` + `addEmbeddingJob()`; job ID locked to `embed:<documentId>` to prevent duplicates on retry; 3 attempts, 15s exponential backoff
+- **`apps/api/src/workers/embedding.worker.ts`** — loads unembedded chunks via raw SQL (skips already-embedded on retry) → calls `embedChunks()` → stores each vector via `$executeRaw` (`UPDATE chunks SET embedding = $1::vector`) → concurrency 1 to respect OpenAI RPM
+- **`apps/api/src/workers/extraction.worker.ts`** — updated to call `addEmbeddingJob({ documentId, firmId })` after marking document `status: "ready"`
+- **`apps/api/src/index.ts`** — starts `startEmbeddingWorker()` on server boot
 
 ### Text Extraction & Chunking
 
@@ -120,18 +132,12 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### High Priority (MVP Feature Work)
 
-1. **Embedding Pipeline** ← **CURRENT PRIORITY**
-   - OpenAI text-embedding-3-small integration
-   - Batch embedding creation (1536-dim vectors)
-   - Vector insert into pgvector `chunks.embedding` column via raw SQL
-   - **Estimated:** 3–4 hours | **Blocked by:** ~~Chunking~~ ✅
-
-2. **RAG Chat Endpoint**
+1. **RAG Chat Endpoint** ← **CURRENT PRIORITY**
    - Vector similarity search + recency weighting
    - Prompt assembly with system message + top-K contexts
    - LLM integration (GPT-4o-mini)
    - Source citation extraction
-   - **Estimated:** 4–5 hours | **Blocked by:** Embedding pipeline
+   - **Estimated:** 4–5 hours | **Blocked by:** ~~Embedding pipeline~~ ✅
 
 ### Medium Priority (UX / Polish)
 
@@ -165,11 +171,10 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Known Issues & Blockers
 
-| Issue                                  | Impact                       | Resolution                              | Status  |
-| -------------------------------------- | ---------------------------- | --------------------------------------- | ------- |
-| No embedding generation (OpenAI)       | Can't vectorize chunks       | Integrate OpenAI text-embedding-3-small | 🔴 TODO |
-| No RAG vector search                   | Chat endpoint non-functional | Implement pgvector similarity search    | 🔴 TODO |
-| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP | Production auth handled by real JWT     | ✅ OK   |
+| Issue                                  | Impact                       | Resolution                           | Status  |
+| -------------------------------------- | ---------------------------- | ------------------------------------ | ------- |
+| No RAG vector search                   | Chat endpoint non-functional | Implement pgvector similarity search | 🔴 TODO |
+| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP | Production auth handled by real JWT  | ✅ OK   |
 
 ---
 
@@ -194,7 +199,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### Production
 
-- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client, jsonwebtoken, googleapis, bullmq, ioredis, pdf-parse, mammoth, xlsx
+- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client, jsonwebtoken, googleapis, bullmq, ioredis, pdf-parse, mammoth, xlsx, openai
 - **Web:** next, react, react-dom
 - **Shared:** zod
 
@@ -206,7 +211,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### Planned (Next Sprint)
 
-- **API:** openai, tesseract.js (OCR fallback)
+- **API:** tesseract.js (OCR fallback)
 - **Web:** @tanstack/react-query, zustand, react-hook-form, framer-motion
 - **All:** eslint, prettier
 
@@ -214,14 +219,11 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Install openai package** — `pnpm --filter @ai-accounting/api add openai`; add `OPENAI_API_KEY` to `.env` + `.env.example`
-2. **Create `src/lib/embedder.ts`** — `embedChunks(chunks)` batches 100 chunks/call, calls `text-embedding-3-small` (1536 dims), returns `{ chunkId, embedding }[]`
-3. **Create `src/workers/embedding.worker.ts`** — BullMQ worker that picks up `ready` documents, loads their chunks, calls `embedder.ts`, stores vectors via raw SQL (`UPDATE chunks SET embedding = $1::vector WHERE id = $2`), updates document status
-4. **Create `src/queues/embedding.queue.ts`** — `embeddingQueue` + `addEmbeddingJob()` helper
-5. **Enqueue embedding jobs from extraction worker** — after setting document `status: "ready"`, call `addEmbeddingJob({ documentId, firmId })`
-6. **Wire `startEmbeddingWorker()` in `index.ts`**
-7. **Implement RAG vector search** — pgvector cosine similarity + recency weighting (`score = similarity × 1/(1 + age_days/365)`), top-K=8, threshold 0.72
-8. **Wire `POST /api/chat`** — embed query → vector search → build prompt → GPT-4o-mini → store Query record with citations
+1. **Create `src/lib/rag.ts`** — `searchChunks(query, firmId)`: embed query → pgvector cosine similarity search (top-K=8, threshold 0.72) via raw SQL + recency weighting (`score = similarity × 1/(1 + age_days/365)`)
+2. **Replace 501 stub in `POST /api/chat`** — call `embedChunks` on the query, then `searchChunks`, assemble system + context prompt, call `gpt-4o-mini` via openai, extract citation `sourceId`s, store Query record (tokens/latency/cost), return `{ answer, sources, queryId }`
+3. **Wire `GET /api/chat/history`** — paginated list of past Query rows for the firm
+4. **Wire `POST /api/chat/:queryId/feedback`** — update Query.feedback field
+5. **Write RAG tests** — unit tests for `rag.ts` with mocked Prisma `$queryRaw`, integration shape test for chat route
 
 ---
 

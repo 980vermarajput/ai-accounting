@@ -53,6 +53,9 @@ importers:
       morgan:
         specifier: ^1.10.0
         version: 1.10.1
+      openai:
+        specifier: ^6.25.0
+        version: 6.25.0(zod@3.25.76)
       pdf-parse:
         specifier: ^2.4.5
         version: 2.4.5
@@ -1552,6 +1555,18 @@ packages:
   on-headers@1.1.0:
     resolution: {integrity: sha512-737ZY3yNnXy37FHkQxPzt4UZ2UWPWiCZWLvFZ4fu5cueciegX0zGPnrlY6bwRg4FdQOe9YU8MkmJwGhoMybl8A==}
     engines: {node: '>= 0.8'}
+
+  openai@6.25.0:
+    resolution: {integrity: sha512-mEh6VZ2ds2AGGokWARo18aPISI1OhlgdEIC1ewhkZr8pSIT31dec0ecr9Nhxx0JlybyOgoAT1sWeKtwPZzJyww==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   option@0.2.4:
     resolution: {integrity: sha512-pkEqbDyl8ou5cpq+VsnQbe/WlEy5qS7xPzMS1U55OCG9KPvwFD46zDbxQIj3egJSFc3D+XhYOPUzz49zQAVy7A==}
@@ -3438,6 +3453,10 @@ snapshots:
       ee-first: 1.1.1
 
   on-headers@1.1.0: {}
+
+  openai@6.25.0(zod@3.25.76):
+    optionalDependencies:
+      zod: 3.25.76
 
   option@0.2.4: {}
 

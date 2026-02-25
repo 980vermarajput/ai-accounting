@@ -21,6 +21,7 @@ import { prisma } from "../lib/prisma";
 import { decrypt } from "../lib/auth";
 import { extractText } from "../lib/extractor";
 import { chunkText } from "../lib/chunker";
+import { addEmbeddingJob } from "../queues/embedding.queue";
 import type { ExtractionJobData } from "../queues/extraction.queue";
 
 // ─── Gmail helpers ────────────────────────────────────────────────
@@ -231,9 +232,14 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
       },
     });
 
+    // 9. Kick off embedding pipeline
+    if (chunks.length > 0) {
+      await addEmbeddingJob({ documentId, firmId });
+    }
+
     await job.updateProgress(100);
     console.log(
-      `[Extraction] Job ${job.id}: document ${documentId} ready — ${chunks.length} chunk(s) stored`,
+      `[Extraction] Job ${job.id}: document ${documentId} ready — ${chunks.length} chunk(s) stored, embedding queued`,
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
