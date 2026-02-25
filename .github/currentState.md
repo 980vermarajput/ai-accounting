@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 25 February 2026 (21:00 UTC)  
-**Status:** RAG Chat Endpoint Complete — Ready for Web UI
+**Last Updated:** 26 February 2026 (10:45 UTC)  
+**Status:** Sync Page + Email Drafts Complete — All Core MVP Features Shipped
 
 ---
 
@@ -23,6 +23,8 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + sentence-aware chunking; extraction worker wired end-to-end
 - ✅ **Embedding Pipeline:** OpenAI text-embedding-3-small; batch embedding worker wired end-to-end; vectors stored via raw SQL into pgvector
 - ✅ **RAG Chat Endpoint:** `POST /api/chat` fully live — vector search, recency weighting, GPT-4o-mini, Query record storage, ChatSource citations
+- ✅ **Web UI:** Next.js 14 App Router — Auth flow, Chat interface, Documents dashboard, Sync page, Email Drafts, protected layout
+- ✅ **Email Drafts:** `POST /api/drafts` + `POST /api/drafts/refine` — RAG-grounded AI email drafting, stateless refinement loop
 
 ---
 
@@ -53,6 +55,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 | `documents.ts` | `/api/documents` | ✅ Scaffolded | `GET /` (list, paginated), `GET /:id`, `POST /upload`, `DELETE /:id` |
 | `chat.ts`      | `/api/chat`      | ✅ Live       | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`      |
 | `sync.ts`      | `/api/sync`      | ✅ Live       | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
+| `drafts.ts`    | `/api/drafts`    | ✅ Live       | `POST /` (generate draft), `POST /refine` (iterate draft)            |
 
 ### Utilities & Middleware
 
@@ -82,6 +85,31 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - **`apps/api/src/workers/embedding.worker.ts`** — loads unembedded chunks via raw SQL (skips already-embedded on retry) → calls `embedChunks()` → stores each vector via `$executeRaw` (`UPDATE chunks SET embedding = $1::vector`) → concurrency 1 to respect OpenAI RPM
 - **`apps/api/src/workers/extraction.worker.ts`** — updated to call `addEmbeddingJob({ documentId, firmId })` after marking document `status: "ready"`
 - **`apps/api/src/index.ts`** — starts `startEmbeddingWorker()` on server boot
+
+### Web UI
+
+- **`apps/web/src/lib/api.ts`** — `apiFetch<T>(path, options)` typed fetch wrapper; `getToken/setToken/clearToken` helpers reading/writing JWT from `localStorage`
+- **`apps/web/src/contexts/user-context.tsx`** — `UserProvider` + `useUser()` hook; fetches `/api/auth/me` on mount; handles `logout()` (clears token + redirects)
+- **`apps/web/src/components/app-nav.tsx`** — fixed 224px sidebar: firm name + role, Chat/Documents/Sync/Drafts nav links, user avatar + sign-out button
+- **`apps/web/src/app/layout.tsx`** — root layout wraps all pages in `<UserProvider>`; `lib: ["ES2022","DOM","DOM.Iterable"]` added to `tsconfig.json`
+- **`apps/web/src/app/page.tsx`** — root redirect: `→ /chat` (authenticated) or `→ /sign-in` (unauthenticated)
+- **`apps/web/src/app/sign-in/page.tsx`** — centered sign-in card with Google OAuth button (`href=/api/auth/google`)
+- **`apps/web/src/app/auth/callback/page.tsx`** — reads `?token=` param (via `useSearchParams` + `<Suspense>`), stores JWT, redirects to `/chat`
+- **`apps/web/src/app/auth/error/page.tsx`** — shows human-readable error message keyed by `?reason=` param
+- **`apps/web/src/app/(app)/layout.tsx`** — protected layout; auth-guards all `/chat` + `/documents` routes; shows `<AppNav>` + main content
+- **`apps/web/src/app/(app)/chat/page.tsx`** — full RAG chat interface: history sidebar (30 recent queries), message thread (user/assistant/error bubbles), expandable source citations, suggested follow-up chips, auto-resizing textarea, starter suggestions, thinking indicator
+- **`apps/web/src/app/(app)/documents/page.tsx`** — documents dashboard: sync Gmail/Drive buttons with loading state, active-sync banner (5s polling), inline sync result messages, filterable table (source + status), status badges with colors, pagination
+- **`apps/web/src/app/(app)/sync/page.tsx`** — sync control centre: Gmail + Drive action cards, auto-polling jobs table (5 s interval, stops when all inactive), status badges with animated running indicator, duration column, per-job Cancel button
+- **`apps/web/src/app/(app)/drafts/page.tsx`** — AI email drafting: instruction textarea + client-ID filter + context toggle → `POST /api/drafts`; draft rendered in editable subject+body fields; Refine panel → `POST /api/drafts/refine`; Context Sources accordion; Copy-to-clipboard button with cost/latency metadata
+
+### Email Drafts
+
+- **`packages/shared/src/types.ts`** — added `DraftResponse` interface: `{ subject, draftText, sources: ChatSource[], metadata: { model, tokensPrompt, tokensCompletion, costEstimateInr, latencyMs } }`
+- **`apps/api/src/routes/drafts.ts`** — stateless draft generation + refinement:
+  - `POST /api/drafts`: validates `draftEmailSchema` → optional `searchChunks(instructions, firmId, { limit:5, threshold:0.65 })` for context → GPT-4o-mini `response_format: json_object` → returns `DraftResponse`
+  - `POST /api/drafts/refine`: validates `refineDraftSchema` (takes existing `draftText` + new `instructions`) → GPT-4o-mini revision → returns refined `DraftResponse`
+  - INR cost calculation: `(promptTokens × 0.15 + completionTokens × 0.6) / 1_000_000 × 83.5`
+- **`apps/api/src/app.ts`** — mounted `draftsRouter` at `/api/drafts`
 
 ### RAG Chat Endpoint
 
@@ -138,29 +166,12 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## In-Progress / Pending
 
-### High Priority (MVP Feature Work)
+### Remaining MVP Work
 
-1. **RAG Chat Endpoint** ← **CURRENT PRIORITY**
-   - Vector similarity search + recency weighting
-   - Prompt assembly with system message + top-K contexts
-   - LLM integration (GPT-4o-mini)
-   - Source citation extraction
-   - **Estimated:** 4–5 hours | **Blocked by:** ~~Embedding pipeline~~ ✅
-
-### Medium Priority (UX / Polish)
-
-6. **Web UI Components**
-   - Chat interface with message history
-   - Document management dashboard
-   - Sync status indicators
-   - Admin user management panel
-   - **Estimated:** 8–10 hours | **Blocked by:** RAG endpoint
-
-7. **Email Draft Feature**
-   - Prompt template for professional CA tone
-   - Refine endpoint (iterate on drafts)
-   - Gmail integration for sending
-   - **Estimated:** 3 hours | **Blocked by:** Auth + RAG
+1. **Production Hardening** — Redis JWT blacklist for logout, rate limiting, proper `HttpOnly` cookie auth (replace localStorage), HTTPS config
+2. **OCR Fallback** — `tesseract.js` for scanned PDF images
+3. **ESLint + Prettier** — code quality tooling across all packages
+4. **Gmail Send Integration** — hook Drafts page "Save to Gmail" button up to Gmail Drafts API
 
 ---
 
@@ -179,27 +190,28 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Known Issues & Blockers
 
-| Issue                                  | Impact                           | Resolution                            | Status  |
-| -------------------------------------- | -------------------------------- | ------------------------------------- | ------- |
-| No Web UI                              | Users can't interact via browser | Implement Next.js chat + documents UI | 🔴 TODO |
-| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP     | Production auth handled by real JWT   | ✅ OK   |
+| Issue                                  | Impact                                | Resolution                                               | Status    |
+| -------------------------------------- | ------------------------------------- | -------------------------------------------------------- | --------- |
+| JWT stored in localStorage             | Vulnerable to XSS in production       | Move to `HttpOnly` cookie via `/api/auth/token` endpoint | 🟡 Dev OK |
+| Logout doesn't blacklist JWT           | Old token valid until expiry (15 min) | Add Redis blacklist in auth service                      | 🟡 Dev OK |
+| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP          | Production auth handled by real JWT                      | ✅ OK     |
 
 ---
 
 ## Key Metrics
 
-| Metric                             | Value                                             |
-| ---------------------------------- | ------------------------------------------------- |
-| **Packages**                       | 3 (api, web, shared)                              |
-| **TypeScript Files**               | ~40 (routes, middleware, utilities)               |
-| **Database Tables**                | 8 with RLS enabled                                |
-| **REST Endpoints**                 | 17 (health + 16 scaffolded)                       |
-| **Zod Schemas**                    | 10 validation schemas                             |
-| **Total LOC** (excl. node_modules) | ~2500                                             |
-| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                         |
-| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                    |
-| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)          |
-| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379 |
+| Metric                             | Value                                                 |
+| ---------------------------------- | ----------------------------------------------------- |
+| **Packages**                       | 3 (api, web, shared)                                  |
+| **TypeScript Files**               | ~40 (routes, middleware, utilities)                   |
+| **Database Tables**                | 8 with RLS enabled                                    |
+| **REST Endpoints**                 | 19 (health + auth + documents + chat + sync + drafts) |
+| **Zod Schemas**                    | 10 validation schemas                                 |
+| **Total LOC** (excl. node_modules) | ~2500                                                 |
+| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                             |
+| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                        |
+| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)              |
+| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379     |
 
 ---
 
@@ -227,11 +239,11 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Web UI — Chat Interface** (`apps/web/src/app/chat/`) — message thread with query input, answer rendering with source citations, suggested follow-up chips, query history sidebar
-2. **Web UI — Documents Dashboard** (`apps/web/src/app/documents/`) — list documents by firm (status badge, source icon, filename), trigger sync, view extraction status
-3. **Web UI — Auth Flow** — Google OAuth sign-in redirect, JWT storage in HttpOnly cookie or localStorage, `useUser` hook via `/api/auth/me`
-4. **Web UI — Sync Status Panel** — show active/recent sync jobs with live polling of `GET /api/sync/status`
-5. **Email Draft Feature** — `POST /api/chat/draft` prompt template for professional CA tone + Gmail send integration
+1. **Production Auth** — move JWT from localStorage to `HttpOnly` `Set-Cookie` header; add Redis blacklist for logout
+2. **Gmail Send Integration** — wire Drafts page "Save to Gmail" button via `POST /api/drafts/:id/send` using user's Google refresh token + Gmail Drafts API
+3. **ESLint + Prettier** — add to all packages for consistent code style
+4. **Docker Compose validation** — run `docker compose up --build` end-to-end smoke test
+5. **OCR fallback** — `tesseract.js` for scanned PDF images that return no text from pdf-parse
 
 ---
 

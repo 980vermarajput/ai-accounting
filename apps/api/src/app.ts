@@ -7,6 +7,7 @@ import { authRouter } from "./routes/auth";
 import { documentsRouter } from "./routes/documents";
 import { chatRouter } from "./routes/chat";
 import { syncRouter } from "./routes/sync";
+import { draftsRouter } from "./routes/drafts";
 import { errorHandler } from "./middleware/error-handler";
 
 const app: Express = express();
@@ -28,6 +29,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/documents", documentsRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/sync", syncRouter);
+app.use("/api/drafts", draftsRouter);
 
 // ─── Error Handling ──────────────────────────────────
 app.use(errorHandler);

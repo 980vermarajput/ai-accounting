@@ -60,8 +60,10 @@ async function processDriveSync(job: Job<SyncJobData>): Promise<void> {
       .map((m) => `mimeType='${m}'`)
       .join(" or ");
 
+    const maxResults = parseInt(process.env.SYNC_MAX_RESULTS ?? "25", 10);
+
     const listRes = await drive.files.list({
-      pageSize: 200,
+      pageSize: maxResults,
       q: `(${mimeQuery}) and trashed=false`,
       fields: "files(id,name,mimeType,modifiedTime,size,parents),nextPageToken",
       orderBy: "modifiedTime desc",

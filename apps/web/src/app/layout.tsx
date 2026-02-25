@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { UserProvider } from "../contexts/user-context";
 
 export const metadata: Metadata = {
   title: "AI Assistant for Accountants",
@@ -14,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 antialiased">{children}</body>
+      <body className="min-h-screen bg-gray-50 antialiased">
+        <UserProvider>{children}</UserProvider>
+      </body>
     </html>
   );
 }

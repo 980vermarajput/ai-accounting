@@ -122,6 +122,21 @@ export interface SyncJob {
   createdAt: Date;
 }
 
+// ─── Drafts ─────────────────────────────────────────
+
+export interface DraftResponse {
+  subject: string;
+  draftText: string;
+  sources: ChatSource[];
+  metadata: {
+    model: string;
+    tokensPrompt: number;
+    tokensCompletion: number;
+    costEstimateInr: number;
+    latencyMs: number;
+  };
+}
+
 // ─── API Responses ───────────────────────────────────
 
 export interface ApiResponse<T = unknown> {

@@ -45,9 +45,11 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
     //    (invoices, GST returns, ITRs sent as PDFs/Excel)
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
+    const maxResults = parseInt(process.env.SYNC_MAX_RESULTS ?? "25", 10);
+
     const listRes = await gmail.users.messages.list({
       userId: "me",
-      maxResults: 200,
+      maxResults,
       q: "has:attachment",
     });
 
