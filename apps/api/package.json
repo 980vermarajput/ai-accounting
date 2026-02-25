@@ -27,8 +27,11 @@
     "helmet": "^8.0.0",
     "ioredis": "^5.9.3",
     "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.11.0",
     "morgan": "^1.10.0",
+    "pdf-parse": "^2.4.5",
     "prisma": "6",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {

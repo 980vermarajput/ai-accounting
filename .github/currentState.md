@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 25 February 2026 (16:00 UTC)  
-**Status:** BullMQ Sync Workers Complete — Ready for Text Extraction & Chunking
+**Last Updated:** 25 February 2026 (17:30 UTC)  
+**Status:** Text Extraction & Chunking Complete — Ready for Embedding Pipeline
 
 ---
 
@@ -20,6 +20,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - ✅ **Authentication:** Google OAuth + JWT fully wired; AES-256-GCM refresh token encryption in place
 - ✅ **Vitest Test Suite:** 71 tests passing (auth lib, auth middleware, Zod schemas)
 - ✅ **BullMQ Sync Workers:** Gmail + Drive workers wired end-to-end; jobs enqueued, processed, DB status updated
+- ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + sentence-aware chunking; extraction worker wired end-to-end
 
 ---
 
@@ -49,7 +50,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 | `auth.ts`      | `/api/auth`      | ✅ Live       | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`     |
 | `documents.ts` | `/api/documents` | ✅ Scaffolded | `GET /` (list, paginated), `GET /:id`, `POST /upload`, `DELETE /:id` |
 | `chat.ts`      | `/api/chat`      | ✅ Scaffolded | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`      |
-| `sync.ts`      | `/api/sync`      | ✅ Live        | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
+| `sync.ts`      | `/api/sync`      | ✅ Live       | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
 
 ### Utilities & Middleware
 
@@ -67,6 +68,16 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - **`apps/api/src/middleware/auth.test.ts`** — 11 tests for `requireAuth` (dev bypass, JWT, expired) and `requireAdmin` (roles)
 - **`turbo.json`** — `test` task added with `dependsOn: ["^build"]`
 - **Total: 71 tests, all green**
+
+### Text Extraction & Chunking
+
+- **`apps/api/src/lib/extractor.ts`** — `extractText(buffer, mimeType)` supporting PDF (`PDFParse` class from pdf-parse v2), DOCX/DOC (mammoth), XLSX/XLS/CSV (xlsx → CSV), and `text/*` plain text; normalizes whitespace; returns `{ text, textHash }` (SHA-256 hex)
+- **`apps/api/src/lib/chunker.ts`** — `chunkText(text)` sentence-aware chunker; 900-token target, 1200-token cap, 200-token overlap between chunks; `~4 chars/token` approximation; returns `ChunkInput[]` with `chunkText`, `tokenCount`, `chunkIndex`
+- **`apps/api/src/queues/extraction.queue.ts`** — `extractionQueue` (BullMQ Queue) + `addExtractionJob()`; job ID locked to `extract:<documentId>` to prevent duplicate extraction; 3 retries with exponential backoff
+- **`apps/api/src/workers/extraction.worker.ts`** — full extraction processor: decrypts refresh token → downloads content (Gmail: `messages.get` full; Drive: `files.get` media / `files.export` for Workspace formats) → `extractText()` → dedup by `textHash` → `chunkText()` → `chunk.createMany()` → sets document `status: "ready"`
+- **`apps/api/src/workers/gmail-sync.worker.ts`** — updated to capture `document.create` return value and enqueue extraction job immediately after
+- **`apps/api/src/workers/drive-sync.worker.ts`** — same pattern
+- **`apps/api/src/index.ts`** — starts `startExtractionWorker()` alongside sync workers
 
 ### BullMQ Sync Workers
 
@@ -109,19 +120,13 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### High Priority (MVP Feature Work)
 
-1. **Text Extraction & Chunking** ← **CURRENT PRIORITY**
-   - PDF, DOCX, XLSX parsers with OCR fallback
-   - Text normalization + SHA-256 dedup
-   - Sentence-aware chunking (800–1200 tokens, 200 overlap)
-   - **Estimated:** 5–6 hours | **Blocked by:** ~~Sync workers~~ ✅
-
-2. **Embedding Pipeline**
+1. **Embedding Pipeline** ← **CURRENT PRIORITY**
    - OpenAI text-embedding-3-small integration
    - Batch embedding creation (1536-dim vectors)
-   - Vector insert into pgvector `chunks.embedding` column
-   - **Estimated:** 3–4 hours | **Blocked by:** Chunking
+   - Vector insert into pgvector `chunks.embedding` column via raw SQL
+   - **Estimated:** 3–4 hours | **Blocked by:** ~~Chunking~~ ✅
 
-3. **RAG Chat Endpoint**
+2. **RAG Chat Endpoint**
    - Vector similarity search + recency weighting
    - Prompt assembly with system message + top-K contexts
    - LLM integration (GPT-4o-mini)
@@ -160,12 +165,11 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Known Issues & Blockers
 
-| Issue                                  | Impact                       | Resolution                               | Status  |
-| -------------------------------------- | ---------------------------- | ---------------------------------------- | ------- |
-| No text extraction / chunking          | Can't process documents      | Add pdf-parse, docx-parse, xlsx packages | 🔴 TODO |
-| No embedding generation (OpenAI)       | Can't vectorize chunks       | Integrate OpenAI text-embedding-3-small  | 🔴 TODO |
-| No RAG vector search                   | Chat endpoint non-functional | Implement pgvector similarity search     | 🔴 TODO |
-| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP | Production auth handled by real JWT      | ✅ OK   |
+| Issue                                  | Impact                       | Resolution                              | Status  |
+| -------------------------------------- | ---------------------------- | --------------------------------------- | ------- |
+| No embedding generation (OpenAI)       | Can't vectorize chunks       | Integrate OpenAI text-embedding-3-small | 🔴 TODO |
+| No RAG vector search                   | Chat endpoint non-functional | Implement pgvector similarity search    | 🔴 TODO |
+| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP | Production auth handled by real JWT     | ✅ OK   |
 
 ---
 
@@ -190,7 +194,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### Production
 
-- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client, jsonwebtoken, googleapis, bullmq, ioredis
+- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client, jsonwebtoken, googleapis, bullmq, ioredis, pdf-parse, mammoth, xlsx
 - **Web:** next, react, react-dom
 - **Shared:** zod
 
@@ -202,7 +206,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### Planned (Next Sprint)
 
-- **API:** openai, pdf-parse, mammoth, xlsx, tesseract.js
+- **API:** openai, tesseract.js (OCR fallback)
 - **Web:** @tanstack/react-query, zustand, react-hook-form, framer-motion
 - **All:** eslint, prettier
 
@@ -210,16 +214,14 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Install text extraction packages** — `pdf-parse`, `mammoth` (DOCX), `xlsx`; add `@types/pdf-parse`
-2. **Create `src/lib/extractor.ts`** — handles PDF → text, DOCX → text, XLSX → text/CSV, plain text pass-through; SHA-256 hash of content
-3. **Create `src/lib/chunker.ts`** — sentence-aware chunking (800–1200 tokens, 200-token overlap), returns `{ chunkText, tokenCount, chunkIndex }[]`
-4. **Integrate extraction into Gmail worker** — after `document.upsert` with `status: "pending"`, call extractor → chunker → insert rows into `chunks` table → set doc `status: "ready"`
-5. **Integrate extraction into Drive worker** — same pipeline after downloading file content
-6. **Install openai package** — add `OPENAI_API_KEY` to `.env.example`
-7. **Create `src/lib/embedder.ts`** — batches chunks (100/call), calls `text-embedding-3-small` (1536 dims), stores vectors via raw SQL `UPDATE chunks SET embedding = $1::vector`
-8. **Call embedder at end of extraction pipeline** — chunks inserted → batched embed → vectors stored
-9. **Implement RAG vector search** — pgvector cosine similarity + recency weighting (`score = similarity × 1/(1 + age_days/365)`), top-K=8, threshold 0.72
-10. **Wire `POST /api/chat`** — embed query → vector search → prompt assembly → GPT-4o-mini → store Query record with citations
+1. **Install openai package** — `pnpm --filter @ai-accounting/api add openai`; add `OPENAI_API_KEY` to `.env` + `.env.example`
+2. **Create `src/lib/embedder.ts`** — `embedChunks(chunks)` batches 100 chunks/call, calls `text-embedding-3-small` (1536 dims), returns `{ chunkId, embedding }[]`
+3. **Create `src/workers/embedding.worker.ts`** — BullMQ worker that picks up `ready` documents, loads their chunks, calls `embedder.ts`, stores vectors via raw SQL (`UPDATE chunks SET embedding = $1::vector WHERE id = $2`), updates document status
+4. **Create `src/queues/embedding.queue.ts`** — `embeddingQueue` + `addEmbeddingJob()` helper
+5. **Enqueue embedding jobs from extraction worker** — after setting document `status: "ready"`, call `addEmbeddingJob({ documentId, firmId })`
+6. **Wire `startEmbeddingWorker()` in `index.ts`**
+7. **Implement RAG vector search** — pgvector cosine similarity + recency weighting (`score = similarity × 1/(1 + age_days/365)`), top-K=8, threshold 0.72
+8. **Wire `POST /api/chat`** — embed query → vector search → build prompt → GPT-4o-mini → store Query record with citations
 
 ---
 

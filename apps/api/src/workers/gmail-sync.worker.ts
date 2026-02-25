@@ -4,6 +4,7 @@ import { google } from "googleapis";
 import { getRedis } from "../lib/redis";
 import { prisma } from "../lib/prisma";
 import { decrypt } from "../lib/auth";
+import { addExtractionJob } from "../queues/extraction.queue";
 import type { SyncJobData } from "../queues/sync.queue";
 
 // ─── Processor ───────────────────────────────────────────────────
@@ -102,7 +103,7 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
         .update(msgRef.id)
         .digest("hex");
 
-      await prisma.document.create({
+      const doc = await prisma.document.create({
         data: {
           firmId,
           userId,
@@ -117,6 +118,16 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
           status: "pending",
           sourceDate,
         },
+      });
+
+      // Enqueue extraction job — worker will download full body, extract text, chunk
+      await addExtractionJob({
+        documentId: doc.id,
+        userId,
+        firmId,
+        source: "gmail",
+        sourceId: msgRef.id,
+        mimeType: "message/rfc822",
       });
 
       documentsProcessed++;

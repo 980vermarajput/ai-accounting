@@ -3,6 +3,7 @@ import "dotenv/config";
 import app from "./app";
 import { startGmailSyncWorker } from "./workers/gmail-sync.worker";
 import { startDriveSyncWorker } from "./workers/drive-sync.worker";
+import { startExtractionWorker } from "./workers/extraction.worker";
 
 const PORT = process.env.PORT || 4000;
 
@@ -14,4 +15,5 @@ app.listen(PORT, () => {
   // In production these can be moved to dedicated worker processes.
   startGmailSyncWorker();
   startDriveSyncWorker();
+  startExtractionWorker();
 });
