@@ -44,17 +44,34 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
     );
     oauth2Client.setCredentials({ refresh_token: refreshToken });
 
-    // 4. Fetch Gmail message list
-    //    We target messages with attachments — most relevant for Indian CA firms
-    //    (invoices, GST returns, ITRs sent as PDFs/Excel)
+    // 4. Build Gmail query with date range and filtering
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    const maxResults = parseInt(process.env.SYNC_MAX_RESULTS ?? "25", 10);
+    // Sync guardrails to prevent cost explosions
+    const maxResults = Math.min(
+      parseInt(process.env.SYNC_MAX_RESULTS ?? "25", 10),
+      parseInt(process.env.MAX_EMAILS_PER_SYNC ?? "10000", 10)
+    );
+    const syncMonths = parseInt(process.env.DEFAULT_SYNC_MONTHS ?? "24", 10);
+    const skipPatterns = (process.env.SKIP_EMAIL_PATTERNS ?? "noreply,newsletter,unsubscribe").split(",");
+
+    // Build date filter (last N months only)
+    const dateThreshold = new Date();
+    dateThreshold.setMonth(dateThreshold.getMonth() - syncMonths);
+    const dateFilter = `after:${dateThreshold.toISOString().split('T')[0]}`;
+
+    // Build query: has attachments, within date range, exclude newsletters
+    let query = `has:attachment ${dateFilter}`;
+    for (const pattern of skipPatterns) {
+      query += ` -from:${pattern.trim()}`;
+    }
+
+    console.log(`[Gmail Sync] Query: ${query}, maxResults: ${maxResults}`);
 
     const listRes = await gmail.users.messages.list({
       userId: "me",
       maxResults,
-      q: "has:attachment",
+      q: query,
     });
 
     const messageRefs = listRes.data.messages ?? [];

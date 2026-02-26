@@ -28,6 +28,12 @@ import {
   sendDraftSchema,
 } from "@ai-accounting/shared";
 import { requireAuth } from "../middleware/auth";
+import {
+  checkTokenLimit,
+  recordTokenUsage,
+  estimateTokens,
+  calculateCostInr,
+} from "../lib/token-usage";
 import { rateLimit } from "../middleware/rate-limiter";
 import { validate } from "../middleware/validate";
 import { searchChunks } from "../lib/rag";
@@ -126,7 +132,11 @@ Always respond with a JSON object containing exactly these two fields:
           ? "\n\nUse the provided context to ensure factual accuracy."
           : "");
 
-      // 3. Call GPT-4o-mini
+      // 3. Check token limit before processing
+      const estimatedTokens = estimateTokens(instructions + contextBlock) + 1000; // Include max_tokens
+      await checkTokenLimit(req.user!.firmId, estimatedTokens);
+
+      // 4. Call GPT-4o-mini
       const openai = getOpenAI();
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -139,7 +149,7 @@ Always respond with a JSON object containing exactly these two fields:
         max_tokens: 1000,
       });
 
-      // 4. Parse JSON response
+      // 5. Parse JSON response
       let subject = "";
       let draftText = "";
       const raw = completion.choices[0]?.message?.content ?? "{}";
@@ -156,6 +166,14 @@ Always respond with a JSON object containing exactly these two fields:
 
       const promptTokens = completion.usage?.prompt_tokens ?? 0;
       const completionTokens = completion.usage?.completion_tokens ?? 0;
+
+      // 6. Record token usage for spend tracking
+      await recordTokenUsage(req.user!.firmId, {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+        costEstimateInr: calcCostInr(promptTokens, completionTokens),
+      });
 
       const response: ApiResponse<DraftResponse> = {
         success: true,
@@ -202,6 +220,10 @@ Always respond with a JSON object containing exactly these two fields:
 
       const userPrompt = `CURRENT DRAFT:\n${draftText}\n\nREFINEMENT INSTRUCTIONS: ${instructions}`;
 
+      // Check token limit before processing
+      const estimatedTokens = estimateTokens(draftText + instructions) + 1000; // Include max_tokens
+      await checkTokenLimit(req.user!.firmId, estimatedTokens);
+
       const openai = getOpenAI();
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -230,6 +252,14 @@ Always respond with a JSON object containing exactly these two fields:
 
       const promptTokens = completion.usage?.prompt_tokens ?? 0;
       const completionTokens = completion.usage?.completion_tokens ?? 0;
+
+      // Record token usage for spend tracking
+      await recordTokenUsage(req.user!.firmId, {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+        costEstimateInr: calcCostInr(promptTokens, completionTokens),
+      });
 
       const response: ApiResponse<DraftResponse> = {
         success: true,

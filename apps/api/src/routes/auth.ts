@@ -10,6 +10,7 @@ import {
   encrypt,
   signJwt,
 } from "../lib/auth";
+import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 
 export const authRouter: Router = Router();
@@ -123,6 +124,14 @@ authRouter.get(
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days — matches JWT expiry
       });
 
+      // Log successful authentication
+      logger.authEvent({
+        userId: user.id,
+        firmId: user.firmId,
+        event: "login",
+        ipAddress: req.ip,
+      });
+
       res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
     } catch (err) {
       next(err);
@@ -136,6 +145,14 @@ authRouter.post("/logout", requireAuth, async (req: Request, res: Response) => {
   if (req.rawToken) {
     await blacklistToken(req.rawToken);
   }
+
+  // Log logout event
+  logger.authEvent({
+    userId: req.user?.userId,
+    firmId: req.user?.firmId,
+    event: "logout",
+    ipAddress: req.ip,
+  });
 
   // Clear the HttpOnly cookie
   res.clearCookie("__session", {

@@ -19,6 +19,12 @@ import {
   type SearchResult,
   type RagAnswer,
 } from "../lib/rag";
+import {
+  checkTokenLimit,
+  recordTokenUsage,
+  estimateTokens,
+} from "../lib/token-usage";
+import { logger } from "../lib/logger";
 import crypto from "crypto";
 import { getRedis } from "../lib/redis";
 
@@ -101,7 +107,11 @@ chatRouter.post(
       }
 
       // ── Live query ────────────────────────────────────────
-      // 1. Vector similarity search — hard cutoff at 0.55, NO fallback
+      // 1. Check token limit before processing
+      const estimatedTokens = estimateTokens(body.query) + 2000; // Query + context buffer
+      await checkTokenLimit(firmId, estimatedTokens);
+
+      // 2. Vector similarity search — hard cutoff at 0.55, NO fallback
       const retrievalStart = Date.now();
       const searchResults = await searchChunks(body.query, firmId, {
         clientId: body.clientId,
@@ -111,10 +121,10 @@ chatRouter.post(
       });
       const retrievalLatencyMs = Date.now() - retrievalStart;
 
-      // 2. Compute confidence from retrieved chunks
+      // 3. Compute confidence from retrieved chunks
       const confidence = computeConfidence(searchResults);
 
-      // 3. LLM generation grounded in retrieved chunks
+      // 4. LLM generation grounded in retrieved chunks
       const ragAnswer = await generateRagAnswer(
         body.query,
         searchResults,
@@ -123,10 +133,31 @@ chatRouter.post(
 
       const latencyMs = Date.now() - totalStart;
 
-      // 4. Build ChatSource list — one entry per unique document (best chunk wins)
+      // 5. Record token usage for spend tracking
+      await recordTokenUsage(firmId, {
+        promptTokens: ragAnswer.tokensPrompt,
+        completionTokens: ragAnswer.tokensCompletion,
+        totalTokens: ragAnswer.tokensPrompt + ragAnswer.tokensCompletion,
+        costEstimateInr: ragAnswer.costInr,
+      });
+
+      // 6. Log structured RAG query metrics for observability
+      logger.ragQuery({
+        firmId,
+        userId,
+        query: body.query.substring(0, 100), // Truncated for privacy
+        chunksRetrieved: searchResults.length,
+        chunksUsed: searchResults.length,
+        tokens: ragAnswer.tokensPrompt + ragAnswer.tokensCompletion,
+        cost: ragAnswer.costInr,
+        latency: latencyMs,
+        cached: false,
+      });
+
+      // 7. Build ChatSource list — one entry per unique document (best chunk wins)
       const sources = buildChatSources(searchResults);
 
-      // 5. Persist the query record for history + analytics
+      // 8. Persist the query record for history + analytics
       const queryRecord = await prisma.query.create({
         data: {
           firmId,
@@ -145,7 +176,7 @@ chatRouter.post(
         },
       });
 
-      // 6. Build response
+      // 9. Build response
       const responseData: ChatResponse = {
         queryId: queryRecord.id,
         answer: ragAnswer.answer,
@@ -165,7 +196,7 @@ chatRouter.post(
         },
       };
 
-      // 7. Cache the response in Redis for 24 hours
+      // 10. Cache the response in Redis for 24 hours
       try {
         await redis.set(
           cacheKey,

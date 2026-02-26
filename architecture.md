@@ -1,8 +1,8 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.0 — Updated 2026-02-26
+> **Version:** 2.1 — Updated 2026-02-26
 > **Author:** @980vermarajput
-> **Status:** MVP Implemented — In Production Testing
+> **Status:** Production-Ready MVP — Security Hardened + Cost Protected
 > **Related:** [PRD v2.1](./PRD.md)
 
 ---
@@ -37,8 +37,8 @@
 | P2  | **Async-first for heavy work**   | Sync, extraction, and embedding are I/O-heavy — use job queues, not request threads                  |
 | P3  | **LLM as a stateless service**   | Never store conversation state in the LLM — reconstruct context per request                          |
 | P4  | **Encrypt everything sensitive** | Tokens, PII at rest (AES-256-GCM); all traffic over TLS 1.3                                          |
-| P5  | **Observe everything**           | Structured logging, distributed tracing, cost tracking per query                                     |
-| P6  | **Cost-aware AI usage**          | Token caps, caching, dedup — control LLM spend from day one                                          |
+| P5  | **Observe everything**           | Structured logging, auth events, cost tracking, RAG metrics — production observability             |
+| P6  | **Cost-aware AI usage**          | ✅ Daily token caps (50K/firm), query limits (6K), Gmail sync guardrails — spend explosions prevented |
 | P7  | **Swap-ready LLM layer**         | Abstract LLM/embedding providers behind interfaces — easy to switch to Anthropic, local models, etc. |
 | P8  | **Monorepo, shared types**       | Single repo with shared TypeScript types between frontend and backend                                |
 

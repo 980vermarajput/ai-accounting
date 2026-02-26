@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { ApiError } from "../lib/api-error";
 import { verifyJwt } from "../lib/auth";
 import { getRedis } from "../lib/redis";
+import { logger } from "../lib/logger";
 
 /**
  * Authenticated user payload attached to req after JWT verification.
@@ -37,7 +38,7 @@ declare global {
  *   X-Dev-User: {"userId":"...","firmId":"...","email":"...","role":"admin"}
  */
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
-  // ── Dev bypass ──
+  // ── Dev bypass (development only) ──
   if (process.env.NODE_ENV === "development") {
     const devHeader = req.headers["x-dev-user"];
     if (typeof devHeader === "string") {
@@ -48,6 +49,9 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
         // fall through to real JWT check
       }
     }
+  } else if (req.headers["x-dev-user"]) {
+    // Explicitly reject dev header in production
+    return next(ApiError.forbidden("Dev auth header not allowed in production"));
   }
 
   // ── Extract token from cookie or header ──
@@ -69,7 +73,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     return next(err);
   }
 
-  // ── Check Redis blacklist (async but non-blocking on failure) ──
+  // ── Check Redis blacklist (FAIL CLOSED for security) ──
   isBlacklisted(token)
     .then((blacklisted) => {
       if (blacklisted) {
@@ -79,9 +83,16 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
       }
       next();
     })
-    .catch(() => {
-      // Redis down — allow request to proceed (fail open for availability)
-      next();
+    .catch((err) => {
+      // Redis down — FAIL CLOSED for security (reject potentially revoked tokens)
+      logger.error("Redis blacklist check failed", {
+        operation: "auth_blacklist_check",
+        error: err.message,
+        type: "infrastructure_error"
+      });
+      return next(
+        ApiError.serviceUnavailable("Authentication service temporarily unavailable"),
+      );
     });
 }
 
