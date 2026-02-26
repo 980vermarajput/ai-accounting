@@ -33,13 +33,14 @@ export const extractionQueue = new Queue<ExtractionJobData>("extraction", {
 /**
  * Enqueue a document extraction job.
  *
- * Uses `extract:<documentId>` as the BullMQ job ID so a document can never
+ * Uses `extract-<documentId>` as the BullMQ job ID so a document can never
  * have two extraction jobs queued simultaneously.
+ * Note: BullMQ forbids colons in custom job IDs (conflicts with Redis key format).
  */
 export async function addExtractionJob(
   data: ExtractionJobData,
 ): Promise<Job<ExtractionJobData>> {
   return extractionQueue.add("extract-document", data, {
-    jobId: `extract:${data.documentId}`,
+    jobId: `extract-${data.documentId}`,
   });
 }

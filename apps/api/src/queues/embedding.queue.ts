@@ -26,13 +26,14 @@ export const embeddingQueue = new Queue<EmbeddingJobData>("embedding", {
 /**
  * Enqueue an embedding job for a document whose chunks are already stored.
  *
- * Uses `embed:<documentId>` as the BullMQ job ID to prevent duplicate embedding
+ * Uses `embed-<documentId>` as the BullMQ job ID to prevent duplicate embedding
  * jobs from queuing up if the extraction worker retries.
+ * Note: BullMQ forbids colons in custom job IDs (conflicts with Redis key format).
  */
 export async function addEmbeddingJob(
   data: EmbeddingJobData,
 ): Promise<Job<EmbeddingJobData>> {
   return embeddingQueue.add("embed-document", data, {
-    jobId: `embed:${data.documentId}`,
+    jobId: `embed-${data.documentId}`,
   });
 }

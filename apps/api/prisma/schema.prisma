@@ -159,16 +159,18 @@ model Document {
 // ─── Chunks (with pgvector embedding) ────────────────
 
 model Chunk {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  documentId String   @map("document_id") @db.Uuid
-  firmId     String   @map("firm_id") @db.Uuid
-  clientId   String?  @map("client_id") @db.Uuid
-  chunkIndex Int      @map("chunk_index")
-  chunkText  String   @map("chunk_text")
-  // embedding stored via raw SQL — Prisma doesn't natively support vector type
-  tokenCount Int      @map("token_count")
-  metadata   Json?    @db.JsonB
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  id         String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId String                    @map("document_id") @db.Uuid
+  firmId     String                    @map("firm_id") @db.Uuid
+  clientId   String?                   @map("client_id") @db.Uuid
+  chunkIndex Int                       @map("chunk_index")
+  chunkText  String                    @map("chunk_text")
+  // Prisma Unsupported() keeps the column in the schema so migrate dev won't drop it.
+  // Reads/writes are done via $queryRaw / $executeRaw with explicit casts.
+  embedding  Unsupported("vector(1536)")?
+  tokenCount Int                       @map("token_count")
+  metadata   Json?                     @db.JsonB
+  createdAt  DateTime                  @default(now()) @map("created_at") @db.Timestamptz()
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   firm     Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)

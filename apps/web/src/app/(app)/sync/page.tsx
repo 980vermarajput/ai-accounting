@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { ApiResponse, SyncJob } from "@ai-accounting/shared";
 import { apiFetch } from "@/lib/api";
 
@@ -53,31 +53,56 @@ export default function SyncPage() {
 
   // ─── Fetch jobs ───────────────────────────────────────────────
 
-  const fetchJobs = useCallback(async () => {
+  const fetchJobs = useCallback(async (): Promise<boolean> => {
     try {
       const res = await apiFetch<ApiResponse<SyncJob[]>>("/api/sync/status");
-      if (res.success && res.data) setJobs(res.data);
+      if (res.success && res.data) {
+        setJobs(res.data);
+        // Return whether any job is still active so the caller can decide to keep polling
+        return res.data.some(
+          (j) => j.status === "queued" || j.status === "running",
+        );
+      }
     } catch {
       // silently ignore polling errors
     } finally {
       setIsLoading(false);
     }
+    return false;
   }, []);
 
-  // Initial fetch on mount
-  useEffect(() => {
-    void fetchJobs();
+  // Ref to the active polling loop's cancel handle so startSync can restart it.
+  const stopPollRef = useRef<(() => void) | null>(null);
+
+  const startPolling = useCallback(() => {
+    // Cancel any existing poll loop before starting a new one
+    stopPollRef.current?.();
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function poll() {
+      if (cancelled) return;
+      const hasActive = await fetchJobs();
+      if (!cancelled && hasActive) {
+        timer = setTimeout(poll, 5_000);
+      }
+    }
+
+    void poll();
+
+    stopPollRef.current = () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [fetchJobs]);
 
-  // Poll every 5 s while at least one job is active
+  // On mount: kick off one poll loop (self-stops when no active jobs).
   useEffect(() => {
-    const hasActive = jobs.some(
-      (j) => j.status === "queued" || j.status === "running",
-    );
-    if (!hasActive) return;
-    const id = setInterval(() => void fetchJobs(), 5_000);
-    return () => clearInterval(id);
-  }, [jobs, fetchJobs]);
+    startPolling();
+    return () => stopPollRef.current?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── Start sync ───────────────────────────────────────────────
 
@@ -93,7 +118,8 @@ export default function SyncPage() {
           "success",
           `${type === "gmail" ? "Gmail" : "Drive"} sync started!`,
         );
-        await fetchJobs();
+        // Restart the polling loop — new job is queued so we need to watch it
+        startPolling();
       }
     } catch (err) {
       showFlash(

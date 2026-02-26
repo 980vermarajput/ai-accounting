@@ -166,9 +166,16 @@ export function decrypt(ciphertext: string): string {
   });
   decipher.setAuthTag(authTag);
 
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
-    "utf8",
-  );
+  try {
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch (err) {
+    throw ApiError.internal(
+      "Failed to decrypt stored token — ENCRYPTION_KEY may have changed. Sign out and sign back in to re-encrypt your credentials.",
+    );
+  }
 }
 
 // ─── JWT ─────────────────────────────────────────────────────────

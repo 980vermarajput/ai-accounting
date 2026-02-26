@@ -1,30 +1,31 @@
 # Current Implementation State
 
-**Last Updated:** 26 February 2026 (10:45 UTC)  
-**Status:** Sync Page + Email Drafts Complete — All Core MVP Features Shipped
+**Last Updated:** 26 February 2026 (18:00 UTC)  
+**Status:** MVP Core Complete — Runtime Tested with Real Gmail Data
 
 ---
 
 ## Overview
 
-The monorepo has **full database schema** and **API route scaffolding** complete. Postgres (pgvector-enabled) is migrated with 8 tables, seeded with demo data, and all REST endpoints are wired up with proper error handling, validation, and multi-tenancy isolation.
+The monorepo has **full database schema**, **API routes**, and **Web UI** complete. All core features have been **runtime-tested with real Gmail data** — the full pipeline (OAuth → Gmail sync → extraction → chunking → embedding → RAG chat) works end-to-end. Multiple runtime bugs were discovered and fixed during production testing.
 
 ### Quick Status
 
 - ✅ **Monorepo Structure:** pnpm + Turborepo configured, all workspaces linked
-- ✅ **API Server:** Express.js with health + auth + documents + chat + sync routes on :4000
-- ✅ **Web Frontend:** Next.js 14 with Tailwind CSS, landing page with API connectivity test on :3000
+- ✅ **API Server:** Express.js with health + auth + documents + chat + sync + drafts routes on :4000
+- ✅ **Web Frontend:** Next.js 14 with Tailwind CSS, full app UI on :3000
 - ✅ **Shared Types:** Domain model + Zod validation schemas defined
-- ✅ **Database:** Postgres 16 + pgvector with RLS, 8 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs)
+- ✅ **Database:** Postgres 16 + pgvector with RLS, 8 tables, `embedding Unsupported("vector(1536)")` protected
 - ✅ **Migrations:** Applied + seeded with demo firm/users/clients
 - ✅ **Authentication:** Google OAuth + JWT fully wired; AES-256-GCM refresh token encryption in place
 - ✅ **Vitest Test Suite:** 121 tests passing (auth lib, auth middleware, Zod schemas, chunker, extractor, embedder, rag)
-- ✅ **BullMQ Sync Workers:** Gmail + Drive workers wired end-to-end; jobs enqueued, processed, DB status updated
-- ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + sentence-aware chunking; extraction worker wired end-to-end
-- ✅ **Embedding Pipeline:** OpenAI text-embedding-3-small; batch embedding worker wired end-to-end; vectors stored via raw SQL into pgvector
-- ✅ **RAG Chat Endpoint:** `POST /api/chat` fully live — vector search, recency weighting, GPT-4o-mini, Query record storage, ChatSource citations
-- ✅ **Web UI:** Next.js 14 App Router — Auth flow, Chat interface, Documents dashboard, Sync page, Email Drafts, protected layout
-- ✅ **Email Drafts:** `POST /api/drafts` + `POST /api/drafts/refine` — RAG-grounded AI email drafting, stateless refinement loop
+- ✅ **BullMQ Sync Workers:** Gmail + Drive workers runtime-tested; attachment extraction working
+- ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + Gmail attachment extraction + sentence-aware chunking
+- ✅ **Embedding Pipeline:** OpenAI text-embedding-3-small; vectors stored in pgvector; 7/8 test chunks embedded
+- ✅ **RAG Chat Endpoint:** Two-pass vector search (threshold 0.55 + fallback 0.35), GPT-4o-mini, citations
+- ✅ **Web UI:** Auth flow, Chat, Documents, Sync (ref-based polling), Email Drafts — all runtime-tested
+- ✅ **Email Drafts:** `POST /api/drafts` + `POST /api/drafts/refine` — RAG-grounded AI email drafting
+- ✅ **Runtime Pipeline:** Gmail sync → extraction → chunking → embedding → RAG chat tested end-to-end
 
 ---
 
@@ -32,11 +33,11 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### Package Infrastructure
 
-| Package                 | Status  | Purpose                                                                              |
-| ----------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `@ai-accounting/shared` | ✅ Live | TypeScript types + Zod validation schemas, exported from barrel file                 |
-| `@ai-accounting/api`    | ✅ Live | Express server, 5 routers (health/auth/docs/chat/sync), error handler, Prisma client |
-| `@ai-accounting/web`    | ✅ Live | Next.js app, landing page, Tailwind CSS setup, API health check UI                   |
+| Package                 | Status  | Purpose                                                                                     |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| `@ai-accounting/shared` | ✅ Live | TypeScript types + Zod validation schemas, exported from barrel file                        |
+| `@ai-accounting/api`    | ✅ Live | Express server, 6 routers (health/auth/docs/chat/sync/drafts), error handler, Prisma client |
+| `@ai-accounting/web`    | ✅ Live | Next.js app, landing page, Tailwind CSS setup, API health check UI                          |
 
 ### Database & ORM
 
@@ -45,8 +46,10 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - **RLS policies** enabled on all tables via `firm_id` partition key
 - **Migrations** applied successfully against local Postgres 16 + pgvector
 - **Seed data** created: 1 firm (Sharma & Associates), 2 users (admin + member), 2 clients
+- **pgvector column protected**: `embedding Unsupported("vector(1536)")` in Chunk model prevents Prisma from auto-dropping it
+- **IVFFlat index**: `idx_chunks_embedding` with `vector_cosine_ops`, `lists=100`
 
-### API Routes (5 Routers)
+### API Routes (6 Routers)
 
 | Router         | Mounted At       | Status        | Endpoints                                                            |
 | -------------- | ---------------- | ------------- | -------------------------------------------------------------------- |
@@ -81,7 +84,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 ### Embedding Pipeline
 
 - **`apps/api/src/lib/embedder.ts`** — `embedChunks(chunks)` batches up to 100 items/call to `text-embedding-3-small` (1536 dims); lazy OpenAI client instantiated on first use; returns `{ chunkId, embedding }[]`; constants `EMBEDDING_MODEL` + `EMBEDDING_DIMENSIONS` exported for reuse
-- **`apps/api/src/queues/embedding.queue.ts`** — `embeddingQueue` + `addEmbeddingJob()`; job ID locked to `embed:<documentId>` to prevent duplicates on retry; 3 attempts, 15s exponential backoff
+- **`apps/api/src/queues/embedding.queue.ts`** — `embeddingQueue` + `addEmbeddingJob()`; job ID uses dashes `embed-<documentId>` (**no colons**); 3 attempts, 15s exponential backoff
 - **`apps/api/src/workers/embedding.worker.ts`** — loads unembedded chunks via raw SQL (skips already-embedded on retry) → calls `embedChunks()` → stores each vector via `$executeRaw` (`UPDATE chunks SET embedding = $1::vector`) → concurrency 1 to respect OpenAI RPM
 - **`apps/api/src/workers/extraction.worker.ts`** — updated to call `addEmbeddingJob({ documentId, firmId })` after marking document `status: "ready"`
 - **`apps/api/src/index.ts`** — starts `startEmbeddingWorker()` on server boot
@@ -99,7 +102,7 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 - **`apps/web/src/app/(app)/layout.tsx`** — protected layout; auth-guards all `/chat` + `/documents` routes; shows `<AppNav>` + main content
 - **`apps/web/src/app/(app)/chat/page.tsx`** — full RAG chat interface: history sidebar (30 recent queries), message thread (user/assistant/error bubbles), expandable source citations, suggested follow-up chips, auto-resizing textarea, starter suggestions, thinking indicator
 - **`apps/web/src/app/(app)/documents/page.tsx`** — documents dashboard: sync Gmail/Drive buttons with loading state, active-sync banner (5s polling), inline sync result messages, filterable table (source + status), status badges with colors, pagination
-- **`apps/web/src/app/(app)/sync/page.tsx`** — sync control centre: Gmail + Drive action cards, auto-polling jobs table (5 s interval, stops when all inactive), status badges with animated running indicator, duration column, per-job Cancel button
+- **`apps/web/src/app/(app)/sync/page.tsx`** — sync control centre: Gmail + Drive action cards, ref-based `setTimeout` polling (stops when all inactive), status badges with animated running indicator, duration column, per-job Cancel button
 - **`apps/web/src/app/(app)/drafts/page.tsx`** — AI email drafting: instruction textarea + client-ID filter + context toggle → `POST /api/drafts`; draft rendered in editable subject+body fields; Refine panel → `POST /api/drafts/refine`; Context Sources accordion; Copy-to-clipboard button with cost/latency metadata
 
 ### Email Drafts
@@ -113,16 +116,16 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 
 ### RAG Chat Endpoint
 
-- **`apps/api/src/lib/rag.ts`** — `searchChunks(query, firmId, options)`: embeds query → pgvector cosine distance ORDER BY with RETRIEVAL_LIMIT=20, threshold filter (0.72) in JS, recency weighting (`score = similarity × 1/(1 + ageDays/365)`), returns top-K `SearchResult[]`; `generateRagAnswer(query, chunks)`: GPT-4o-mini with `response_format: json_object`, system prompt adapts to no-context case, returns `{answer, suggestedFollowups, model, tokensPrompt, tokensCompletion, costInr}`
-- **`apps/api/src/routes/chat.ts`** — `POST /` fully wired: `searchChunks` → `generateRagAnswer` → `buildChatSources` (dedup by documentId) → `prisma.query.create` (stores retrievedChunkIds, tokens, latency, costInr) → returns `ChatResponse`; `GET /history` and `POST /:queryId/feedback` remain as scaffolded
-- **Constants exported:** `SIMILARITY_THRESHOLD = 0.72`, `DEFAULT_LIMIT = 8`, `RECENCY_SCALE_DAYS = 365`, `CHAT_MODEL = "gpt-4o-mini"`
+- **`apps/api/src/lib/rag.ts`** — `searchChunks(query, firmId, options)`: embeds query → pgvector cosine distance ORDER BY with RETRIEVAL_LIMIT=20, threshold filter (0.55) in JS, fallback threshold (0.35) for broad queries, recency weighting (`score = similarity × 1/(1 + ageDays/365)`), returns top-K `SearchResult[]`; `generateRagAnswer(query, chunks)`: GPT-4o-mini with `response_format: json_object`, system prompt adapts to no-context case, returns `{answer, suggestedFollowups, model, tokensPrompt, tokensCompletion, costInr}`
+- **`apps/api/src/routes/chat.ts`** — `POST /` fully wired: `searchChunks` → two-pass fallback search → `generateRagAnswer` → `buildChatSources` (dedup by documentId) → `prisma.query.create` (stores retrievedChunkIds, tokens, latency, costInr) → returns `ChatResponse`; `GET /history` and `POST /:queryId/feedback` implemented
+- **Constants exported:** `SIMILARITY_THRESHOLD = 0.55`, `FALLBACK_SIMILARITY_THRESHOLD = 0.35`, `DEFAULT_LIMIT = 8`, `RETRIEVAL_LIMIT = 20`, `RECENCY_SCALE_DAYS = 365`, `CHAT_MODEL = "gpt-4o-mini"``
 
 ### Text Extraction & Chunking
 
 - **`apps/api/src/lib/extractor.ts`** — `extractText(buffer, mimeType)` supporting PDF (`PDFParse` class from pdf-parse v2), DOCX/DOC (mammoth), XLSX/XLS/CSV (xlsx → CSV), and `text/*` plain text; normalizes whitespace; returns `{ text, textHash }` (SHA-256 hex)
 - **`apps/api/src/lib/chunker.ts`** — `chunkText(text)` sentence-aware chunker; 900-token target, 1200-token cap, 200-token overlap between chunks; `~4 chars/token` approximation; returns `ChunkInput[]` with `chunkText`, `tokenCount`, `chunkIndex`
-- **`apps/api/src/queues/extraction.queue.ts`** — `extractionQueue` (BullMQ Queue) + `addExtractionJob()`; job ID locked to `extract:<documentId>` to prevent duplicate extraction; 3 retries with exponential backoff
-- **`apps/api/src/workers/extraction.worker.ts`** — full extraction processor: decrypts refresh token → downloads content (Gmail: `messages.get` full; Drive: `files.get` media / `files.export` for Workspace formats) → `extractText()` → dedup by `textHash` → `chunkText()` → `chunk.createMany()` → sets document `status: "ready"`
+- **`apps/api/src/queues/extraction.queue.ts`** — `extractionQueue` (BullMQ Queue) + `addExtractionJob()`; job ID uses dashes `extract-<documentId>` (**no colons** — BullMQ Redis key conflict); 3 retries with exponential backoff
+- **`apps/api/src/workers/extraction.worker.ts`** — full extraction processor: decrypts refresh token (`Buffer.from().toString("utf8")`) → downloads content (Gmail: `messages.get` full + attachment downloads via `collectAttachmentParts()`; Drive: `files.get` media / `files.export`) → `extractText()` → dedup by `textHash` → `chunkText()` → `chunk.createMany()` → sets document `status: "ready"`
 - **`apps/api/src/workers/gmail-sync.worker.ts`** — updated to capture `document.create` return value and enqueue extraction job immediately after
 - **`apps/api/src/workers/drive-sync.worker.ts`** — same pattern
 - **`apps/api/src/index.ts`** — starts `startExtractionWorker()` alongside sync workers
@@ -172,6 +175,19 @@ The monorepo has **full database schema** and **API route scaffolding** complete
 2. **OCR Fallback** — `tesseract.js` for scanned PDF images
 3. **ESLint + Prettier** — code quality tooling across all packages
 4. **Gmail Send Integration** — hook Drafts page "Save to Gmail" button up to Gmail Drafts API
+5. **Admin Dashboard** — `/api/admin/*` endpoints for user management, usage stats, audit log
+
+### Runtime Bugs Fixed (This Session)
+
+| Bug                                        | Root Cause                                        | Fix                                                       |
+| ------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------- |
+| BullMQ "Custom Id cannot contain :"        | Colons in job IDs conflict with Redis key format  | Changed `:` to `-` in all job IDs                         |
+| "Failed to decrypt stored token"           | Prisma `Bytes` returns `Uint8Array`, not `Buffer` | `Buffer.from(field).toString("utf8")` in all 3 workers    |
+| Documents stuck in pending                 | BullMQ deduplicates by previously-seen job IDs    | Timestamp suffix on re-queued job IDs                     |
+| "No text could be extracted" for emails    | Extraction worker only read body, not attachments | Added `collectAttachmentParts()` + attachment download    |
+| Sync page polling indefinitely             | React stale-closure bug with `setInterval`        | Ref-based `setTimeout` chain                              |
+| `column c.embedding does not exist`        | Migration auto-dropped pgvector column            | Re-added column + `Unsupported("vector(1536)")` in schema |
+| RAG returns no results for general queries | `SIMILARITY_THRESHOLD = 0.72` too strict          | Lowered to 0.55 + fallback 0.35 with two-pass search      |
 
 ---
 

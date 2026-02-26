@@ -143,9 +143,9 @@ describe("searchChunks", () => {
   it("filters out rows below the similarity threshold", async () => {
     mockEmbed.mockResolvedValueOnce(fakeQueryEmbedding());
     mockQuery.mockResolvedValueOnce([
-      fakeRow("c1", 0.85), // above threshold (0.72)
-      fakeRow("c2", 0.6), // below threshold — should be excluded
-      fakeRow("c3", 0.72), // exactly at threshold — should be included
+      fakeRow("c1", 0.85), // above threshold (0.55)
+      fakeRow("c2", 0.3), // below threshold — should be excluded
+      fakeRow("c3", 0.55), // exactly at threshold — should be included
     ]);
 
     const results = await searchChunks("query", FIRM_ID);
@@ -159,7 +159,7 @@ describe("searchChunks", () => {
 
   it("returns empty array when all rows are below threshold", async () => {
     mockEmbed.mockResolvedValueOnce(fakeQueryEmbedding());
-    mockQuery.mockResolvedValueOnce([fakeRow("c1", 0.4), fakeRow("c2", 0.5)]);
+    mockQuery.mockResolvedValueOnce([fakeRow("c1", 0.2), fakeRow("c2", 0.3)]);
 
     const results = await searchChunks("query", FIRM_ID, {
       threshold: SIMILARITY_THRESHOLD,

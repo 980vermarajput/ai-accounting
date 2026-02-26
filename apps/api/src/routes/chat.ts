@@ -10,7 +10,12 @@ import { chatRequestSchema } from "@ai-accounting/shared";
 import { requireAuth } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { prisma } from "../lib/prisma";
-import { searchChunks, generateRagAnswer, type SearchResult } from "../lib/rag";
+import {
+  searchChunks,
+  generateRagAnswer,
+  FALLBACK_SIMILARITY_THRESHOLD,
+  type SearchResult,
+} from "../lib/rag";
 
 export const chatRouter: Router = Router();
 
@@ -29,12 +34,24 @@ chatRouter.post(
 
       // 1. Vector similarity search with optional filters
       const retrievalStart = Date.now();
-      const searchResults = await searchChunks(body.query, firmId, {
+      let searchResults = await searchChunks(body.query, firmId, {
         clientId: body.clientId,
         dateFrom: body.filters?.dateFrom,
         dateTo: body.filters?.dateTo,
         sources: body.filters?.source,
       });
+
+      // Fallback: if no results at default threshold, retry with a lower
+      // threshold so general questions ("which firms?") still surface docs.
+      if (searchResults.length === 0) {
+        searchResults = await searchChunks(body.query, firmId, {
+          clientId: body.clientId,
+          dateFrom: body.filters?.dateFrom,
+          dateTo: body.filters?.dateTo,
+          sources: body.filters?.source,
+          threshold: FALLBACK_SIMILARITY_THRESHOLD,
+        });
+      }
       const retrievalLatencyMs = Date.now() - retrievalStart;
 
       // 2. LLM generation grounded in retrieved chunks

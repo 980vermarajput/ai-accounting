@@ -64,6 +64,37 @@ function extractEmailBodyText(
   return "";
 }
 
+/**
+ * Recursively collect all attachment parts (parts with a filename and an
+ * attachmentId) from a Gmail message MIME tree.
+ */
+function collectAttachmentParts(
+  payload: gmail_v1.Schema$MessagePart | undefined,
+): Array<{ filename: string; mimeType: string; attachmentId: string }> {
+  if (!payload) return [];
+  const results: Array<{
+    filename: string;
+    mimeType: string;
+    attachmentId: string;
+  }> = [];
+
+  if (payload.filename && payload.body?.attachmentId) {
+    results.push({
+      filename: payload.filename,
+      mimeType: payload.mimeType ?? "application/octet-stream",
+      attachmentId: payload.body.attachmentId,
+    });
+  }
+
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      results.push(...collectAttachmentParts(part));
+    }
+  }
+
+  return results;
+}
+
 // ─── Processor ───────────────────────────────────────────────────
 
 async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
@@ -85,7 +116,12 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
       );
     }
 
-    const refreshToken = decrypt(user.googleRefreshTokenEnc.toString());
+    // googleRefreshTokenEnc is a Prisma Bytes field — returned as Uint8Array.
+    // Buffer.from() is required before .toString() to recover the original UTF-8
+    // base64 string; direct Uint8Array.toString() gives "70,43,111,..." instead.
+    const refreshToken = decrypt(
+      Buffer.from(user.googleRefreshTokenEnc).toString("utf8"),
+    );
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -107,11 +143,49 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
         format: "full",
       });
 
+      // Start with the email body text + snippet
       const bodyText =
         extractEmailBodyText(msgRes.data.payload) +
         (msgRes.data.snippet ? `\n\n${msgRes.data.snippet}` : "");
 
-      buffer = Buffer.from(bodyText, "utf-8");
+      // Also extract text from any attachments (PDFs, CSVs, DOCX, XLSX, etc.)
+      const attachmentParts = collectAttachmentParts(msgRes.data.payload);
+      const attachmentTexts: string[] = [];
+
+      for (const att of attachmentParts) {
+        try {
+          const attRes = await gmail.users.messages.attachments.get({
+            userId: "me",
+            messageId: sourceId,
+            id: att.attachmentId,
+          });
+
+          if (attRes.data.data) {
+            const attBuffer = Buffer.from(attRes.data.data, "base64url");
+            const { text: attText } = await extractText(
+              attBuffer,
+              att.mimeType,
+            );
+            if (attText) {
+              attachmentTexts.push(
+                `\n\n--- Attachment: ${att.filename} ---\n${attText}`,
+              );
+              console.log(
+                `[Extraction] Job ${job.id}: extracted ${attText.length} chars from attachment "${att.filename}"`,
+              );
+            }
+          }
+        } catch (attErr) {
+          // Non-fatal — skip unreadable attachments but log the warning
+          console.warn(
+            `[Extraction] Job ${job.id}: could not extract attachment "${att.filename}":`,
+            attErr instanceof Error ? attErr.message : attErr,
+          );
+        }
+      }
+
+      const combined = [bodyText, ...attachmentTexts].join("").trim();
+      buffer = Buffer.from(combined || " ", "utf-8"); // space prevents empty-buffer edge case
       effectiveMimeType = "text/plain";
     } else if (source === "drive") {
       // ── Drive ──────────────────────────────────────────────────

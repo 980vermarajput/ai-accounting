@@ -28,9 +28,12 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
       );
     }
 
-    // googleRefreshTokenEnc stores Buffer.from(encrypt(refreshToken))
-    // toString() recovers the base64 ciphertext string that decrypt() expects
-    const refreshToken = decrypt(user.googleRefreshTokenEnc.toString());
+    // googleRefreshTokenEnc is a Prisma Bytes field — returned as Uint8Array or Buffer.
+    // Always wrap with Buffer.from() before calling .toString() so we get the
+    // original UTF-8 base64 string, not a comma-separated decimal array.
+    const refreshToken = decrypt(
+      Buffer.from(user.googleRefreshTokenEnc).toString("utf8"),
+    );
 
     // 3. Create Google OAuth2 client with the decrypted refresh token
     const oauth2Client = new google.auth.OAuth2(

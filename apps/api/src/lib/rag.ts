@@ -22,7 +22,10 @@ import type { DocumentSource } from "@ai-accounting/shared";
 // ─── Constants ───────────────────────────────────────────────────
 
 /** Minimum cosine similarity to include a chunk in results (0–1). */
-export const SIMILARITY_THRESHOLD = 0.72;
+export const SIMILARITY_THRESHOLD = 0.55;
+
+/** Fallback threshold when the primary search returns no results. */
+export const FALLBACK_SIMILARITY_THRESHOLD = 0.35;
 
 /** Default max results returned to the caller after re-ranking. */
 export const DEFAULT_LIMIT = 8;

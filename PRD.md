@@ -1,8 +1,8 @@
 # MVP PRD — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.0 — Updated 2026-02-25
+> **Version:** 2.1 — Updated 2026-02-26
 > **Author:** @980vermarajput
-> **Status:** Draft → Ready for Engineering
+> **Status:** MVP Core Complete — In Production Testing
 
 ---
 
@@ -16,32 +16,32 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### Primary Goals
 
-| # | Goal |
-|---|------|
-| G1 | Validate product–market fit with small CA firms (5–20 people). |
-| G2 | Measurably reduce time spent searching emails, docs, and spreadsheets. |
-| G3 | Provide accurate, citation-backed answers — never hallucinated financial data. |
+| #   | Goal                                                                           |
+| --- | ------------------------------------------------------------------------------ |
+| G1  | Validate product–market fit with small CA firms (5–20 people).                 |
+| G2  | Measurably reduce time spent searching emails, docs, and spreadsheets.         |
+| G3  | Provide accurate, citation-backed answers — never hallucinated financial data. |
 
 ### Success Metrics (First 3 Months)
 
-| Metric | Target |
-|--------|--------|
-| Pilot firms onboarded | ≥ 10 |
-| Avg. useful queries per user / day | ≥ 5 |
+| Metric                                | Target |
+| ------------------------------------- | ------ |
+| Pilot firms onboarded                 | ≥ 10   |
+| Avg. useful queries per user / day    | ≥ 5    |
 | Grounded-answer accuracy (human eval) | ≥ 70 % |
-| Pilot → Paid conversion | ≥ 20 % |
-| P95 end-to-end chat latency | ≤ 8 s |
-| User satisfaction (NPS) | ≥ 40 |
+| Pilot → Paid conversion               | ≥ 20 % |
+| P95 end-to-end chat latency           | ≤ 8 s  |
+| User satisfaction (NPS)               | ≥ 40   |
 
 ---
 
 ## 3 — Target Users & Personas
 
-| Persona | Age | Key Pain Point | Primary MVP Use Case |
-|---------|-----|----------------|----------------------|
-| **Senior CA (firm owner)** | 30–50 | Context switching between 50+ clients | Quick client summary & outstanding items |
-| **Associate / Junior CA** | 20–30 | Finding receipts buried in email threads | Search for specific invoices, draft follow-ups |
-| **Office Admin** | 25–40 | Manual doc uploads, scheduling follow-ups | Upload client docs, view sync status |
+| Persona                    | Age   | Key Pain Point                            | Primary MVP Use Case                           |
+| -------------------------- | ----- | ----------------------------------------- | ---------------------------------------------- |
+| **Senior CA (firm owner)** | 30–50 | Context switching between 50+ clients     | Quick client summary & outstanding items       |
+| **Associate / Junior CA**  | 20–30 | Finding receipts buried in email threads  | Search for specific invoices, draft follow-ups |
+| **Office Admin**           | 25–40 | Manual doc uploads, scheduling follow-ups | Upload client docs, view sync status           |
 
 ---
 
@@ -49,16 +49,16 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### ✅ In Scope
 
-| Feature | Description |
-|---------|-------------|
-| **Google OAuth** | Gmail + Drive read-only access via OAuth 2.0 with PKCE |
-| **Text Extraction** | PDF (OCR fallback), DOCX, XLSX/CSV, plain text, `.eml` |
-| **RAG Chat** | Ask questions → get grounded answers with source citations |
-| **Draft Email** | Compose replies in professional CA tone with action items |
-| **Admin Dashboard** | Sync status, user management, data freshness indicators |
-| **Multi-tenancy** | Firm-level data isolation with row-level security |
-| **Audit Logging** | Every query, every chunk sent to LLM, every user action |
-| **Billing (simple)** | Stripe Checkout for per-seat monthly billing |
+| Feature              | Description                                                |
+| -------------------- | ---------------------------------------------------------- |
+| **Google OAuth**     | Gmail + Drive read-only access via OAuth 2.0 with PKCE     |
+| **Text Extraction**  | PDF (OCR fallback), DOCX, XLSX/CSV, plain text, `.eml`     |
+| **RAG Chat**         | Ask questions → get grounded answers with source citations |
+| **Draft Email**      | Compose replies in professional CA tone with action items  |
+| **Admin Dashboard**  | Sync status, user management, data freshness indicators    |
+| **Multi-tenancy**    | Firm-level data isolation with row-level security          |
+| **Audit Logging**    | Every query, every chunk sent to LLM, every user action    |
+| **Billing (simple)** | Stripe Checkout for per-seat monthly billing               |
 
 ### ❌ Out of Scope (Future Phases)
 
@@ -73,18 +73,18 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ## 5 — High-Level System Architecture
 
-| Layer | Technology | Notes |
-|-------|------------|-------|
-| **Frontend** | Next.js 14 (App Router) | SSR + React Server Components, Tailwind CSS |
-| **Backend API** | Node.js 20 + Express.js | TypeScript, modular route handlers |
-| **Background Jobs** | BullMQ + Redis | Email sync, Drive sync, chunking, embedding |
-| **Database** | PostgreSQL 16 + pgvector | RLS for multi-tenancy, vector similarity search |
-| **Cache** | Redis 7 | Session cache, job queue, rate-limit counters |
-| **Object Storage** | AWS S3 | Raw documents, processed text cache |
-| **AI / LLM** | OpenAI API (GPT-4o-mini + text-embedding-3-small) | Swappable via adapter pattern |
-| **Hosting** | AWS Mumbai (ap-south-1) | ECS Fargate, RDS, ElastiCache, S3 |
-| **Monitoring** | CloudWatch + Sentry + Prometheus/Grafana | Logs, errors, metrics |
-| **Auth** | NextAuth.js (Google provider) + JWT | Refresh token encrypted at rest |
+| Layer               | Technology                                        | Notes                                           |
+| ------------------- | ------------------------------------------------- | ----------------------------------------------- |
+| **Frontend**        | Next.js 14 (App Router)                           | SSR + React Server Components, Tailwind CSS     |
+| **Backend API**     | Node.js 20 + Express.js                           | TypeScript, modular route handlers              |
+| **Background Jobs** | BullMQ + Redis                                    | Email sync, Drive sync, chunking, embedding     |
+| **Database**        | PostgreSQL 16 + pgvector                          | RLS for multi-tenancy, vector similarity search |
+| **Cache**           | Redis 7                                           | Session cache, job queue, rate-limit counters   |
+| **Object Storage**  | AWS S3                                            | Raw documents, processed text cache             |
+| **AI / LLM**        | OpenAI API (GPT-4o-mini + text-embedding-3-small) | Swappable via adapter pattern                   |
+| **Hosting**         | AWS Mumbai (ap-south-1)                           | ECS Fargate, RDS, ElastiCache, S3               |
+| **Monitoring**      | CloudWatch + Sentry + Prometheus/Grafana          | Logs, errors, metrics                           |
+| **Auth**            | Custom JWT + Google OAuth 2.0                     | Refresh token encrypted at rest (AES-256-GCM)   |
 
 ---
 
@@ -92,148 +92,148 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### `firms`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| name | VARCHAR(255) | Firm name |
-| slug | VARCHAR(100) UNIQUE | URL-safe identifier |
-| plan | ENUM('trial','starter','pro') | Billing plan |
-| stripe_customer_id | VARCHAR(255) | Nullable |
-| created_at | TIMESTAMPTZ | |
-| updated_at | TIMESTAMPTZ | |
+| Column             | Type                          | Notes               |
+| ------------------ | ----------------------------- | ------------------- |
+| id                 | UUID PK                       |                     |
+| name               | VARCHAR(255)                  | Firm name           |
+| slug               | VARCHAR(100) UNIQUE           | URL-safe identifier |
+| plan               | ENUM('trial','starter','pro') | Billing plan        |
+| stripe_customer_id | VARCHAR(255)                  | Nullable            |
+| created_at         | TIMESTAMPTZ                   |                     |
+| updated_at         | TIMESTAMPTZ                   |                     |
 
 ### `users`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| firm_id | FK → firms.id | Multi-tenancy key |
-| email | VARCHAR(255) UNIQUE | |
-| name | VARCHAR(255) | |
-| role | ENUM('admin','member') | |
-| google_refresh_token_enc | BYTEA | AES-256-GCM encrypted |
-| google_token_iv | BYTEA | Initialization vector |
-| last_sync_at | TIMESTAMPTZ | |
-| created_at | TIMESTAMPTZ | |
-| updated_at | TIMESTAMPTZ | |
+| Column                   | Type                   | Notes                 |
+| ------------------------ | ---------------------- | --------------------- |
+| id                       | UUID PK                |                       |
+| firm_id                  | FK → firms.id          | Multi-tenancy key     |
+| email                    | VARCHAR(255) UNIQUE    |                       |
+| name                     | VARCHAR(255)           |                       |
+| role                     | ENUM('admin','member') |                       |
+| google_refresh_token_enc | BYTEA                  | AES-256-GCM encrypted |
+| google_token_iv          | BYTEA                  | Initialization vector |
+| last_sync_at             | TIMESTAMPTZ            |                       |
+| created_at               | TIMESTAMPTZ            |                       |
+| updated_at               | TIMESTAMPTZ            |                       |
 
 ### `clients`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| firm_id | FK → firms.id | |
-| created_by | FK → users.id | |
-| name | VARCHAR(255) | |
-| identifier | VARCHAR(100) | Client code (e.g., "ABC-001") |
-| email_domain | VARCHAR(255) | Auto-detected from emails |
-| metadata | JSONB | Flexible fields |
-| created_at | TIMESTAMPTZ | |
+| Column       | Type          | Notes                         |
+| ------------ | ------------- | ----------------------------- |
+| id           | UUID PK       |                               |
+| firm_id      | FK → firms.id |                               |
+| created_by   | FK → users.id |                               |
+| name         | VARCHAR(255)  |                               |
+| identifier   | VARCHAR(100)  | Client code (e.g., "ABC-001") |
+| email_domain | VARCHAR(255)  | Auto-detected from emails     |
+| metadata     | JSONB         | Flexible fields               |
+| created_at   | TIMESTAMPTZ   |                               |
 
 ### `documents`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| firm_id | FK → firms.id | RLS partition key |
-| user_id | FK → users.id | Who synced it |
-| client_id | FK → clients.id | Nullable |
-| source | ENUM('gmail','drive','upload') | |
-| source_id | VARCHAR(500) | Gmail message ID or Drive file ID |
-| filename | VARCHAR(500) | |
-| mime_type | VARCHAR(100) | |
-| s3_key | VARCHAR(500) | Raw file in S3 |
-| text_hash | VARCHAR(64) | SHA-256 for dedup |
-| text_excerpt | TEXT | First 500 chars |
-| status | ENUM('pending','processing','ready','error') | |
-| error_message | TEXT | Nullable |
-| source_date | TIMESTAMPTZ | Original email/file date |
-| created_at | TIMESTAMPTZ | |
+| Column        | Type                                         | Notes                             |
+| ------------- | -------------------------------------------- | --------------------------------- |
+| id            | UUID PK                                      |                                   |
+| firm_id       | FK → firms.id                                | RLS partition key                 |
+| user_id       | FK → users.id                                | Who synced it                     |
+| client_id     | FK → clients.id                              | Nullable                          |
+| source        | ENUM('gmail','drive','upload')               |                                   |
+| source_id     | VARCHAR(500)                                 | Gmail message ID or Drive file ID |
+| filename      | VARCHAR(500)                                 |                                   |
+| mime_type     | VARCHAR(100)                                 |                                   |
+| s3_key        | VARCHAR(500)                                 | Raw file in S3                    |
+| text_hash     | VARCHAR(64)                                  | SHA-256 for dedup                 |
+| text_excerpt  | TEXT                                         | First 500 chars                   |
+| status        | ENUM('pending','processing','ready','error') |                                   |
+| error_message | TEXT                                         | Nullable                          |
+| source_date   | TIMESTAMPTZ                                  | Original email/file date          |
+| created_at    | TIMESTAMPTZ                                  |                                   |
 
 ### `chunks`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| document_id | FK → documents.id | CASCADE delete |
-| firm_id | FK → firms.id | RLS partition key |
-| client_id | FK → clients.id | Nullable, denormalized for query speed |
-| chunk_index | INT | Order within document |
-| chunk_text | TEXT | |
-| embedding | VECTOR(1536) | pgvector, text-embedding-3-small |
-| token_count | INT | |
-| metadata | JSONB | Source page, paragraph ref, etc. |
-| created_at | TIMESTAMPTZ | |
+| Column      | Type              | Notes                                  |
+| ----------- | ----------------- | -------------------------------------- |
+| id          | UUID PK           |                                        |
+| document_id | FK → documents.id | CASCADE delete                         |
+| firm_id     | FK → firms.id     | RLS partition key                      |
+| client_id   | FK → clients.id   | Nullable, denormalized for query speed |
+| chunk_index | INT               | Order within document                  |
+| chunk_text  | TEXT              |                                        |
+| embedding   | VECTOR(1536)      | pgvector, text-embedding-3-small       |
+| token_count | INT               |                                        |
+| metadata    | JSONB             | Source page, paragraph ref, etc.       |
+| created_at  | TIMESTAMPTZ       |                                        |
 
 **Index:** `CREATE INDEX idx_chunks_embedding ON chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);`
 
 ### `queries`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| firm_id | FK → firms.id | |
-| user_id | FK → users.id | |
-| client_id | FK → clients.id | Nullable |
-| query_text | TEXT | |
-| response_text | TEXT | |
-| retrieved_chunk_ids | UUID[] | Array of chunk IDs used |
-| chunks_sent_to_llm | INT | Count for audit |
-| llm_model | VARCHAR(50) | |
-| llm_tokens_prompt | INT | |
-| llm_tokens_completion | INT | |
-| llm_cost_inr | DECIMAL(10,4) | Estimated cost |
-| latency_ms | INT | Total E2E |
-| retrieval_latency_ms | INT | Vector search only |
-| feedback | ENUM('positive','negative','none') | User thumbs up/down |
-| created_at | TIMESTAMPTZ | |
+| Column                | Type                               | Notes                   |
+| --------------------- | ---------------------------------- | ----------------------- |
+| id                    | UUID PK                            |                         |
+| firm_id               | FK → firms.id                      |                         |
+| user_id               | FK → users.id                      |                         |
+| client_id             | FK → clients.id                    | Nullable                |
+| query_text            | TEXT                               |                         |
+| response_text         | TEXT                               |                         |
+| retrieved_chunk_ids   | UUID[]                             | Array of chunk IDs used |
+| chunks_sent_to_llm    | INT                                | Count for audit         |
+| llm_model             | VARCHAR(50)                        |                         |
+| llm_tokens_prompt     | INT                                |                         |
+| llm_tokens_completion | INT                                |                         |
+| llm_cost_inr          | DECIMAL(10,4)                      | Estimated cost          |
+| latency_ms            | INT                                | Total E2E               |
+| retrieval_latency_ms  | INT                                | Vector search only      |
+| feedback              | ENUM('positive','negative','none') | User thumbs up/down     |
+| created_at            | TIMESTAMPTZ                        |                         |
 
 ### `audit_logs`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| firm_id | FK → firms.id | |
-| user_id | FK → users.id | |
-| action | VARCHAR(100) | 'query', 'sync_gmail', 'login', etc. |
-| resource_type | VARCHAR(50) | 'document', 'chunk', 'query' |
-| resource_id | UUID | |
-| details | JSONB | Context-specific data |
-| ip_address | INET | |
-| created_at | TIMESTAMPTZ | |
+| Column        | Type          | Notes                                |
+| ------------- | ------------- | ------------------------------------ |
+| id            | UUID PK       |                                      |
+| firm_id       | FK → firms.id |                                      |
+| user_id       | FK → users.id |                                      |
+| action        | VARCHAR(100)  | 'query', 'sync_gmail', 'login', etc. |
+| resource_type | VARCHAR(50)   | 'document', 'chunk', 'query'         |
+| resource_id   | UUID          |                                      |
+| details       | JSONB         | Context-specific data                |
+| ip_address    | INET          |                                      |
+| created_at    | TIMESTAMPTZ   |                                      |
 
 ### `sync_jobs`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| firm_id | FK → firms.id | |
-| user_id | FK → users.id | |
-| type | ENUM('gmail','drive') | |
-| status | ENUM('queued','running','completed','failed') | |
-| documents_found | INT | |
-| documents_processed | INT | |
-| error_message | TEXT | Nullable |
-| started_at | TIMESTAMPTZ | |
-| completed_at | TIMESTAMPTZ | |
-| created_at | TIMESTAMPTZ | |
+| Column              | Type                                          | Notes    |
+| ------------------- | --------------------------------------------- | -------- |
+| id                  | UUID PK                                       |          |
+| firm_id             | FK → firms.id                                 |          |
+| user_id             | FK → users.id                                 |          |
+| type                | ENUM('gmail','drive')                         |          |
+| status              | ENUM('queued','running','completed','failed') |          |
+| documents_found     | INT                                           |          |
+| documents_processed | INT                                           |          |
+| error_message       | TEXT                                          | Nullable |
+| started_at          | TIMESTAMPTZ                                   |          |
+| completed_at        | TIMESTAMPTZ                                   |          |
+| created_at          | TIMESTAMPTZ                                   |          |
 
 ---
 
 ## 7 — Vectorization & Chunking Strategy
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| **Embedding model** | `text-embedding-3-small` (1536 dims) | Cost-effective, good quality |
-| **Chunk size** | 800–1200 tokens | Balance between context and precision |
-| **Chunk overlap** | 200 tokens | Preserve context across boundaries |
-| **Preprocessing** | Strip boilerplate signatures, email headers, duplicate whitespace | Reduce noise |
-| **Deduplication** | SHA-256 hash of normalized text | Skip re-embedding identical content |
-| **Top-K retrieval** | K = 8 | Sufficient context without exceeding token limits |
-| **Ranking formula** | `score = cosine_similarity × recency_weight` | |
-| **Recency weight** | `1 / (1 + age_days / 365)` | Bias toward recent documents |
-| **Minimum similarity threshold** | 0.72 | Filter out low-relevance noise |
-| **Max context tokens** | 6,000 tokens | Cost control, fits in context window |
+| Parameter                        | Value                                                             | Rationale                                                 |
+| -------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
+| **Embedding model**              | `text-embedding-3-small` (1536 dims)                              | Cost-effective, good quality                              |
+| **Chunk size**                   | 800–1200 tokens                                                   | Balance between context and precision                     |
+| **Chunk overlap**                | 200 tokens                                                        | Preserve context across boundaries                        |
+| **Preprocessing**                | Strip boilerplate signatures, email headers, duplicate whitespace | Reduce noise                                              |
+| **Deduplication**                | SHA-256 hash of normalized text                                   | Skip re-embedding identical content                       |
+| **Top-K retrieval**              | K = 8 (display), 20 (retrieval limit)                             | Retrieve 20, rank & return top 8                          |
+| **Ranking formula**              | `score = cosine_similarity × recency_weight`                      |                                                           |
+| **Recency weight**               | `1 / (1 + age_days / 365)`                                        | Bias toward recent documents                              |
+| **Minimum similarity threshold** | 0.55 (primary), 0.35 (fallback)                                   | Two-pass search: retry with lower threshold if no results |
+| **Max context tokens**           | 6,000 tokens                                                      | Cost control, fits in context window                      |
 
 ### Chunking Pipeline
 
@@ -250,38 +250,38 @@ Document → Text Extraction → Normalization → Dedup Check
 
 ### Authentication
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/auth/google` | Redirect to Google OAuth consent screen |
-| GET | `/api/auth/google/callback` | Exchange code → store encrypted refresh token |
-| POST | `/api/auth/logout` | Revoke session, clear tokens |
-| GET | `/api/auth/me` | Return current user + firm info |
+| Method | Endpoint                    | Description                                   | Status  |
+| ------ | --------------------------- | --------------------------------------------- | ------- |
+| GET    | `/api/auth/google`          | Redirect to Google OAuth consent screen       | ✅ Live |
+| GET    | `/api/auth/google/callback` | Exchange code → store encrypted refresh token | ✅ Live |
+| POST   | `/api/auth/logout`          | Revoke session, clear tokens                  | ✅ Live |
+| GET    | `/api/auth/me`              | Return current user + firm info               | ✅ Live |
 
 ### Data Sync
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/sync/gmail` | Enqueue Gmail sync job (last N months) |
-| POST | `/api/sync/drive` | Enqueue Drive folder sync job |
-| GET | `/api/sync/status` | Per-user sync jobs with progress |
-| POST | `/api/sync/cancel/:jobId` | Cancel a running sync job |
+| Method | Endpoint                  | Description                            | Status  |
+| ------ | ------------------------- | -------------------------------------- | ------- |
+| POST   | `/api/sync/gmail`         | Enqueue Gmail sync job (last N months) | ✅ Live |
+| POST   | `/api/sync/drive`         | Enqueue Drive folder sync job          | ✅ Live |
+| GET    | `/api/sync/status`        | Per-user sync jobs with progress       | ✅ Live |
+| POST   | `/api/sync/cancel/:jobId` | Cancel a running sync job              | ✅ Live |
 
 ### Documents
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/documents/upload` | Manual file upload (PDF, DOCX, XLSX) |
-| GET | `/api/documents` | List documents with filters (client, source, date) |
-| GET | `/api/documents/:id` | Document detail + chunk count |
-| DELETE | `/api/documents/:id` | Delete document + chunks + embeddings |
+| Method | Endpoint                | Description                                        | Status        |
+| ------ | ----------------------- | -------------------------------------------------- | ------------- |
+| POST   | `/api/documents/upload` | Manual file upload (PDF, DOCX, XLSX)               | ⏳ Scaffolded |
+| GET    | `/api/documents`        | List documents with filters (client, source, date) | ✅ Live       |
+| GET    | `/api/documents/:id`    | Document detail + chunk count                      | ✅ Live       |
+| DELETE | `/api/documents/:id`    | Delete document + chunks + embeddings              | ✅ Live       |
 
 ### Chat / RAG
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/chat` | Submit query → RAG pipeline → grounded answer |
-| GET | `/api/chat/history` | Query history with pagination |
-| POST | `/api/chat/:queryId/feedback` | Submit thumbs up/down feedback |
+| Method | Endpoint                      | Description                                   | Status  |
+| ------ | ----------------------------- | --------------------------------------------- | ------- |
+| POST   | `/api/chat`                   | Submit query → RAG pipeline → grounded answer | ✅ Live |
+| GET    | `/api/chat/history`           | Query history with pagination                 | ✅ Live |
+| POST   | `/api/chat/:queryId/feedback` | Submit thumbs up/down feedback                | ✅ Live |
 
 #### `POST /api/chat` — Request
 
@@ -320,7 +320,7 @@ Document → Text Extraction → Normalization → Dedup Check
     "model": "gpt-4o-mini",
     "tokens_prompt": 890,
     "tokens_completion": 230,
-    "cost_estimate_inr": 2.40,
+    "cost_estimate_inr": 2.4,
     "latency_ms": 3200,
     "retrieval_latency_ms": 180,
     "chunks_retrieved": 8,
@@ -331,12 +331,12 @@ Document → Text Extraction → Normalization → Dedup Check
 
 ### Draft Email
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/draft-email` | Generate email draft using context |
-| POST | `/api/draft-email/refine` | Refine a generated draft with instructions |
+| Method | Endpoint             | Description                                    | Status  |
+| ------ | -------------------- | ---------------------------------------------- | ------- |
+| POST   | `/api/drafts`        | Generate email draft using RAG context         | ✅ Live |
+| POST   | `/api/drafts/refine` | Refine a generated draft with new instructions | ✅ Live |
 
-#### `POST /api/draft-email` — Request
+#### `POST /api/drafts` — Request
 
 ```json
 {
@@ -348,7 +348,7 @@ Document → Text Extraction → Normalization → Dedup Check
 }
 ```
 
-#### `POST /api/draft-email` — Response
+#### `POST /api/drafts` — Response
 
 ```json
 {
@@ -365,13 +365,13 @@ Document → Text Extraction → Normalization → Dedup Check
 
 ### Admin
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/admin/users` | List firm users |
-| POST | `/api/admin/users/invite` | Invite user by email |
-| DELETE | `/api/admin/users/:id` | Revoke user access + tokens |
-| GET | `/api/admin/usage` | Query/token/cost stats |
-| GET | `/api/admin/audit-log` | Audit log with filters |
+| Method | Endpoint                  | Description                 | Status     |
+| ------ | ------------------------- | --------------------------- | ---------- |
+| GET    | `/api/admin/users`        | List firm users             | ⏳ Planned |
+| POST   | `/api/admin/users/invite` | Invite user by email        | ⏳ Planned |
+| DELETE | `/api/admin/users/:id`    | Revoke user access + tokens | ⏳ Planned |
+| GET    | `/api/admin/usage`        | Query/token/cost stats      | ⏳ Planned |
+| GET    | `/api/admin/audit-log`    | Audit log with filters      | ⏳ Planned |
 
 ---
 
@@ -516,39 +516,39 @@ Click "Draft Reply" → Modal opens with:
 
 ## 11 — Security, Privacy & Compliance
 
-| Area | Implementation |
-|------|---------------|
-| **Data Residency** | All infra in AWS `ap-south-1` (Mumbai) |
-| **Encryption at Rest** | RDS encryption (AES-256), S3 SSE-KMS |
-| **Token Encryption** | Google refresh tokens: AES-256-GCM with per-user IV, key in AWS Secrets Manager |
-| **Encryption in Transit** | TLS 1.3 everywhere |
-| **Multi-tenancy Isolation** | PostgreSQL Row-Level Security (RLS) on `firm_id` |
-| **LLM Data Minimization** | Only send retrieved chunks to LLM, never full documents |
-| **Consent UI** | Explicit opt-in: "We will read your emails and Drive files to answer queries. Your data is stored encrypted and never used to train AI models." |
-| **Audit Trail** | Every query, every chunk sent to LLM, every login logged in `audit_logs` table |
-| **Token Revocation** | Admin can revoke any user's Google tokens instantly |
-| **Rate Limiting** | Per-user: 60 queries/hour; Per-firm: 500 queries/hour |
-| **RBAC** | Admin (manage users, view audit) vs. Member (query, sync own data) |
-| **Indian IT Act** | Comply with IT Act 2000, SPDI Rules 2011, DPDP Act 2023 |
-| **Data Retention** | Configurable per-firm; default 12 months; auto-purge option |
-| **Vulnerability Scanning** | Snyk + npm audit in CI pipeline |
+| Area                        | Implementation                                                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Data Residency**          | All infra in AWS `ap-south-1` (Mumbai)                                                                                                          |
+| **Encryption at Rest**      | RDS encryption (AES-256), S3 SSE-KMS                                                                                                            |
+| **Token Encryption**        | Google refresh tokens: AES-256-GCM with per-user IV, key in AWS Secrets Manager                                                                 |
+| **Encryption in Transit**   | TLS 1.3 everywhere                                                                                                                              |
+| **Multi-tenancy Isolation** | PostgreSQL Row-Level Security (RLS) on `firm_id`                                                                                                |
+| **LLM Data Minimization**   | Only send retrieved chunks to LLM, never full documents                                                                                         |
+| **Consent UI**              | Explicit opt-in: "We will read your emails and Drive files to answer queries. Your data is stored encrypted and never used to train AI models." |
+| **Audit Trail**             | Every query, every chunk sent to LLM, every login logged in `audit_logs` table                                                                  |
+| **Token Revocation**        | Admin can revoke any user's Google tokens instantly                                                                                             |
+| **Rate Limiting**           | Per-user: 60 queries/hour; Per-firm: 500 queries/hour                                                                                           |
+| **RBAC**                    | Admin (manage users, view audit) vs. Member (query, sync own data)                                                                              |
+| **Indian IT Act**           | Comply with IT Act 2000, SPDI Rules 2011, DPDP Act 2023                                                                                         |
+| **Data Retention**          | Configurable per-firm; default 12 months; auto-purge option                                                                                     |
+| **Vulnerability Scanning**  | Snyk + npm audit in CI pipeline                                                                                                                 |
 
 ---
 
 ## 12 — Non-Functional Requirements
 
-| Requirement | Target | Measurement |
-|-------------|--------|-------------|
-| Chat retrieval latency (vector search) | ≤ 500 ms (P95) | Prometheus histogram |
-| Full chat answer latency (E2E) | ≤ 8 s (P95) | Prometheus histogram |
-| Gmail sync throughput | ≥ 100 emails/min | Job metrics |
-| Document processing throughput | ≥ 50 docs/min | Job metrics |
-| Availability | 99.5% during IST business hours | CloudWatch uptime |
-| API error rate | < 1% | Sentry + CloudWatch |
-| Max concurrent users per instance | 50 | Load testing |
-| Max context tokens per query | 6,000 | Application config |
-| Max file size for upload | 25 MB | Application config |
-| Database backup | Automated daily with 7-day retention | RDS config |
+| Requirement                            | Target                               | Measurement          |
+| -------------------------------------- | ------------------------------------ | -------------------- |
+| Chat retrieval latency (vector search) | ≤ 500 ms (P95)                       | Prometheus histogram |
+| Full chat answer latency (E2E)         | ≤ 8 s (P95)                          | Prometheus histogram |
+| Gmail sync throughput                  | ≥ 100 emails/min                     | Job metrics          |
+| Document processing throughput         | ≥ 50 docs/min                        | Job metrics          |
+| Availability                           | 99.5% during IST business hours      | CloudWatch uptime    |
+| API error rate                         | < 1%                                 | Sentry + CloudWatch  |
+| Max concurrent users per instance      | 50                                   | Load testing         |
+| Max context tokens per query           | 6,000                                | Application config   |
+| Max file size for upload               | 25 MB                                | Application config   |
+| Database backup                        | Automated daily with 7-day retention | RDS config           |
 
 ---
 
@@ -556,34 +556,34 @@ Click "Draft Reply" → Modal opens with:
 
 ### Test Pyramid
 
-| Layer | Tools | Coverage Target |
-|-------|-------|-----------------|
-| **Unit Tests** | Jest | ≥ 80% for parsers, chunking, prompt builders |
-| **Integration Tests** | Jest + Supertest | All API endpoints, DB operations |
-| **E2E Tests** | Playwright | Critical flows: login, sync, chat, draft |
-| **Load Tests** | k6 | 50 concurrent users, 8s P95 latency |
-| **Security Tests** | OWASP ZAP + manual pen test | Top 10 OWASP vulnerabilities |
+| Layer                 | Tools                       | Coverage Target                                                  |
+| --------------------- | --------------------------- | ---------------------------------------------------------------- |
+| **Unit Tests**        | Vitest                      | ≥ 80% for parsers, chunking, prompt builders (121 tests passing) |
+| **Integration Tests** | Vitest + Supertest          | All API endpoints, DB operations                                 |
+| **E2E Tests**         | Playwright                  | Critical flows: login, sync, chat, draft                         |
+| **Load Tests**        | k6                          | 50 concurrent users, 8s P95 latency                              |
+| **Security Tests**    | OWASP ZAP + manual pen test | Top 10 OWASP vulnerabilities                                     |
 
 ### Key Test Scenarios
 
-| # | Scenario | Expected Result |
-|---|----------|-----------------|
-| T1 | PDF extraction with scanned images | OCR fallback produces readable text |
-| T2 | XLSX with 50 sheets, 10K rows | All sheets parsed, chunks created within 60s |
-| T3 | Query with no relevant context | "I don't have enough information..." + suggestions |
-| T4 | Query about specific invoice | Exact amount + date cited with [excerpt] |
-| T5 | Draft email for payment reminder | Professional tone, action items, deadline |
-| T6 | User from Firm A queries Firm B data | Zero results (RLS enforced) |
-| T7 | Expired Google token during sync | Auto-refresh or graceful error + re-auth prompt |
-| T8 | 200 concurrent chat requests | All complete within 12s, no 5xx errors |
-| T9 | Duplicate document upload | Deduped via SHA-256 hash, no duplicate chunks |
-| T10 | Admin revokes user token | User's sync stops, existing data retained |
+| #   | Scenario                             | Expected Result                                    |
+| --- | ------------------------------------ | -------------------------------------------------- |
+| T1  | PDF extraction with scanned images   | OCR fallback produces readable text                |
+| T2  | XLSX with 50 sheets, 10K rows        | All sheets parsed, chunks created within 60s       |
+| T3  | Query with no relevant context       | "I don't have enough information..." + suggestions |
+| T4  | Query about specific invoice         | Exact amount + date cited with [excerpt]           |
+| T5  | Draft email for payment reminder     | Professional tone, action items, deadline          |
+| T6  | User from Firm A queries Firm B data | Zero results (RLS enforced)                        |
+| T7  | Expired Google token during sync     | Auto-refresh or graceful error + re-auth prompt    |
+| T8  | 200 concurrent chat requests         | All complete within 12s, no 5xx errors             |
+| T9  | Duplicate document upload            | Deduped via SHA-256 hash, no duplicate chunks      |
+| T10 | Admin revokes user token             | User's sync stops, existing data retained          |
 
 ### Acceptance Test Example
 
 > **Seed doc:** Email containing `"Invoice INV-2025-007: outstanding amount ₹45,000 due 2026-03-10"`
 >
-> **Query:** *"What invoices are outstanding for ABC Pvt Ltd?"*
+> **Query:** _"What invoices are outstanding for ABC Pvt Ltd?"_
 >
 > **Expected:** Answer mentions INV-2025-007 with ₹45,000 and due date in [brackets], plus Sources block referencing the document.
 
@@ -591,16 +591,16 @@ Click "Draft Reply" → Modal opens with:
 
 ## 14 — Dev Milestones (90-Day Plan)
 
-| Week | Sprint | Deliverables |
-|------|--------|-------------|
-| 0 | **Setup** | Repo structure, CI/CD pipeline, AWS infra (Terraform), DB schema migration, Google OAuth app |
-| 1–2 | **Auth & Foundation** | Google OAuth flow, JWT sessions, user/firm CRUD, RLS setup, basic Next.js shell |
-| 3–4 | **Ingestion Pipeline** | Gmail sync worker, Drive sync worker, S3 storage, document status tracking |
-| 5–6 | **Text Processing** | PDF/DOCX/XLSX extraction, text normalization, chunking pipeline, embedding batch jobs |
-| 7–8 | **RAG Engine** | Vector search with pgvector, prompt assembly, LLM integration, chat API, source citations |
-| 9–10 | **Chat UI & Email Draft** | Chat interface, conversation history, draft email modal, client sidebar |
-| 11 | **Admin & Polish** | Admin dashboard, audit logs, usage stats, sync status UI, error handling |
-| 12 | **Pilot Launch** | Security hardening, load testing, pilot onboarding (10 firms), feedback collection |
+| Week | Sprint                    | Deliverables                                                                                 | Status     |
+| ---- | ------------------------- | -------------------------------------------------------------------------------------------- | ---------- |
+| 0    | **Setup**                 | Repo structure, CI/CD pipeline, AWS infra (Terraform), DB schema migration, Google OAuth app | ✅ Done    |
+| 1–2  | **Auth & Foundation**     | Google OAuth flow, JWT sessions, user/firm CRUD, RLS setup, basic Next.js shell              | ✅ Done    |
+| 3–4  | **Ingestion Pipeline**    | Gmail sync worker, Drive sync worker, S3 storage, document status tracking                   | ✅ Done    |
+| 5–6  | **Text Processing**       | PDF/DOCX/XLSX extraction, text normalization, chunking pipeline, embedding batch jobs        | ✅ Done    |
+| 7–8  | **RAG Engine**            | Vector search with pgvector, prompt assembly, LLM integration, chat API, source citations    | ✅ Done    |
+| 9–10 | **Chat UI & Email Draft** | Chat interface, conversation history, draft email modal, client sidebar                      | ✅ Done    |
+| 11   | **Admin & Polish**        | Admin dashboard, audit logs, usage stats, sync status UI, error handling                     | ⏳ Partial |
+| 12   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection           | ⏳ Pending |
 
 ---
 
@@ -608,17 +608,17 @@ Click "Draft Reply" → Modal opens with:
 
 ### Monthly Cost (Pilot Phase: 10 firms, ~50 users)
 
-| Item | Specification | Est. Cost (INR/month) |
-|------|--------------|----------------------|
-| ECS Fargate (2 tasks) | 1 vCPU, 2 GB RAM each | ₹3,000–5,000 |
-| RDS PostgreSQL | db.t4g.medium, 50 GB, pgvector | ₹4,000–6,000 |
-| ElastiCache Redis | cache.t4g.micro | ₹1,500–2,000 |
-| S3 | ~50 GB storage | ₹100–300 |
-| OpenAI API (embeddings) | ~500K tokens/day embedding | ₹1,000–3,000 |
-| OpenAI API (chat) | ~200 queries/day × 2K tokens | ₹3,000–8,000 |
-| CloudWatch + Sentry | Monitoring | ₹500–1,000 |
-| Domain + SSL | Route53, ACM | ₹500 |
-| **Total** | | **₹13,000–26,000** |
+| Item                    | Specification                  | Est. Cost (INR/month) |
+| ----------------------- | ------------------------------ | --------------------- |
+| ECS Fargate (2 tasks)   | 1 vCPU, 2 GB RAM each          | ₹3,000–5,000          |
+| RDS PostgreSQL          | db.t4g.medium, 50 GB, pgvector | ₹4,000–6,000          |
+| ElastiCache Redis       | cache.t4g.micro                | ₹1,500–2,000          |
+| S3                      | ~50 GB storage                 | ₹100–300              |
+| OpenAI API (embeddings) | ~500K tokens/day embedding     | ₹1,000–3,000          |
+| OpenAI API (chat)       | ~200 queries/day × 2K tokens   | ₹3,000–8,000          |
+| CloudWatch + Sentry     | Monitoring                     | ₹500–1,000            |
+| Domain + SSL            | Route53, ACM                   | ₹500                  |
+| **Total**               |                                | **₹13,000–26,000**    |
 
 ### Scaling Notes
 
@@ -630,12 +630,12 @@ Click "Draft Reply" → Modal opens with:
 
 ## 16 — Go-to-Market (MVP)
 
-| Phase | Timeline | Activities |
-|-------|----------|-----------|
-| **Pre-launch** | Week 10–11 | LinkedIn posts in CA groups, personal outreach to 30 firms |
-| **Pilot** | Week 12–16 | 10 firms, free access, weekly check-in calls |
-| **Feedback** | Week 16–20 | Iterate based on pilot feedback, fix top 5 issues |
-| **Paid Launch** | Week 20+ | ₹499/user/month pricing, Stripe billing |
+| Phase           | Timeline   | Activities                                                 |
+| --------------- | ---------- | ---------------------------------------------------------- |
+| **Pre-launch**  | Week 10–11 | LinkedIn posts in CA groups, personal outreach to 30 firms |
+| **Pilot**       | Week 12–16 | 10 firms, free access, weekly check-in calls               |
+| **Feedback**    | Week 16–20 | Iterate based on pilot feedback, fix top 5 issues          |
+| **Paid Launch** | Week 20+   | ₹499/user/month pricing, Stripe billing                    |
 
 ### Demo Script (3 Use Cases, 8 minutes)
 
@@ -647,34 +647,34 @@ Click "Draft Reply" → Modal opens with:
 
 ## 17 — Risks & Mitigations
 
-| # | Risk | Likelihood | Impact | Mitigation |
-|---|------|-----------|--------|-----------|
-| R1 | LLM hallucination of financial data | Medium | High | Strict system prompt, mandatory source citations, user feedback loop, confidence scoring |
-| R2 | Google OAuth scope rejection | Low | High | Request minimal scopes, prepare compliance docs, apply for verification early |
-| R3 | Data privacy concerns from firms | Medium | High | Mumbai region, encryption at rest + transit, transparent consent UI, audit logs |
-| R4 | Low pilot adoption | Medium | Medium | Hands-on onboarding, video walkthroughs, dedicated Slack/WhatsApp support channel |
-| R5 | OpenAI API costs exceed budget | Medium | Medium | Token caps per query, aggressive caching, summary embeddings, usage alerts |
-| R6 | Poor OCR quality for scanned docs | Medium | Low | Offer manual text correction UI, flag low-confidence extractions |
-| R7 | Concurrent sync overloads DB | Low | Medium | BullMQ rate limiting, connection pooling, queue prioritization |
+| #   | Risk                                | Likelihood | Impact | Mitigation                                                                               |
+| --- | ----------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------- |
+| R1  | LLM hallucination of financial data | Medium     | High   | Strict system prompt, mandatory source citations, user feedback loop, confidence scoring |
+| R2  | Google OAuth scope rejection        | Low        | High   | Request minimal scopes, prepare compliance docs, apply for verification early            |
+| R3  | Data privacy concerns from firms    | Medium     | High   | Mumbai region, encryption at rest + transit, transparent consent UI, audit logs          |
+| R4  | Low pilot adoption                  | Medium     | Medium | Hands-on onboarding, video walkthroughs, dedicated Slack/WhatsApp support channel        |
+| R5  | OpenAI API costs exceed budget      | Medium     | Medium | Token caps per query, aggressive caching, summary embeddings, usage alerts               |
+| R6  | Poor OCR quality for scanned docs   | Medium     | Low    | Offer manual text correction UI, flag low-confidence extractions                         |
+| R7  | Concurrent sync overloads DB        | Low        | Medium | BullMQ rate limiting, connection pooling, queue prioritization                           |
 
 ---
 
 ## 18 — Deliverables Summary
 
-| # | Deliverable | Owner |
-|---|-------------|-------|
-| D1 | Monorepo with `apps/web`, `apps/api`, `packages/shared`, `infra/` | Engineering |
-| D2 | Terraform/CDK scripts for AWS Mumbai deployment | DevOps |
-| D3 | Database migrations (all tables above) | Backend |
-| D4 | Google OAuth integration with token encryption | Backend |
-| D5 | Gmail + Drive sync workers (BullMQ) | Backend |
-| D6 | Text extraction service (PDF, DOCX, XLSX) | Backend |
-| D7 | Chunking + embedding pipeline | Backend |
-| D8 | RAG chat endpoint with source citations | Backend |
-| D9 | Email draft endpoint | Backend |
-| D10 | Next.js frontend (dashboard, chat, admin) | Frontend |
-| D11 | Audit logging middleware | Backend |
-| D12 | Unit + integration + E2E test suites | Engineering |
-| D13 | CI/CD pipeline (GitHub Actions) | DevOps |
-| D14 | Load testing results (k6) | QA |
-| D15 | Security assessment report | Security |
+| #   | Deliverable                                                       | Owner       |
+| --- | ----------------------------------------------------------------- | ----------- |
+| D1  | Monorepo with `apps/web`, `apps/api`, `packages/shared`, `infra/` | Engineering |
+| D2  | Terraform/CDK scripts for AWS Mumbai deployment                   | DevOps      |
+| D3  | Database migrations (all tables above)                            | Backend     |
+| D4  | Google OAuth integration with token encryption                    | Backend     |
+| D5  | Gmail + Drive sync workers (BullMQ)                               | Backend     |
+| D6  | Text extraction service (PDF, DOCX, XLSX)                         | Backend     |
+| D7  | Chunking + embedding pipeline                                     | Backend     |
+| D8  | RAG chat endpoint with source citations                           | Backend     |
+| D9  | Email draft endpoint                                              | Backend     |
+| D10 | Next.js frontend (dashboard, chat, admin)                         | Frontend    |
+| D11 | Audit logging middleware                                          | Backend     |
+| D12 | Unit + integration + E2E test suites                              | Engineering |
+| D13 | CI/CD pipeline (GitHub Actions)                                   | DevOps      |
+| D14 | Load testing results (k6)                                         | QA          |
+| D15 | Security assessment report                                        | Security    |

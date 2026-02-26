@@ -1,9 +1,9 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 1.0 — 2026-02-25
+> **Version:** 2.0 — Updated 2026-02-26
 > **Author:** @980vermarajput
-> **Status:** Approved for MVP Development
-> **Related:** [PRD v2.0](./PRD-AI-Assistant-for-Accountants-India-MVP.md)
+> **Status:** MVP Implemented — In Production Testing
+> **Related:** [PRD v2.1](./PRD.md)
 
 ---
 
@@ -150,8 +150,8 @@
 │  │  • Validate (Zod) │  │  • /api/sync/*    │                  │
 │  │  • Error Handler  │  │  • /api/chat      │                  │
 │  │  • RLS Context    │  │  • /api/documents │                  │
-│  │  • Morgan Logging │  │  • /api/health    │                  │
-│  │  • Helmet + CORS  │  │                   │                  │
+│  │  • Morgan Logging │  │  • /api/drafts    │                  │
+│  │  • Helmet + CORS  │  │  • /api/health    │                  │
 │  └─────────────────┘  └────────┬──────────┘                  │
 │                                │                              │
 │  ┌─────────────────────────────▼──────────────────────────┐  │
@@ -338,9 +338,10 @@ User       Frontend        API Server      PostgreSQL/pgvector    Redis Cache   
  │            │                │────────────────────────────────────────────────────▶│
  │            │                │  ◀── query_vector ──────────────────────────────────│
  │            │                │                   │                   │              │
- │            │                │  3. Vector search (top-K=8)           │              │
- │            │                │  WHERE firm_id = ? AND similarity > 0.72            │
- │            │                │  ORDER BY similarity * recency_weight DESC          │
+│            │                │  3. Vector search (top-K=20, display K=8)  │              │
+│            │                │  WHERE firm_id = ? AND similarity > 0.55   │              │
+│            │                │  (fallback to 0.35 if 0 results)           │              │
+│            │                │  ORDER BY similarity * recency_weight DESC │              │
  │            │                │──────────────────▶│                   │              │
  │            │                │  ◀── chunks ──────│                   │              │
  │            │                │                   │                   │              │
@@ -479,13 +480,111 @@ Our Prisma schema defines 8 core models with pgvector support and RLS:
 
 ## 8 — RAG Pipeline Architecture
 
-_To be detailed after embedding pipeline is implemented. Currently scaffolded in POST /api/chat endpoint._
+### 8.1 Overview
+
+The RAG pipeline is fully implemented in `apps/api/src/lib/rag.ts` and `apps/api/src/routes/chat.ts`. It provides grounded, citation-backed answers using pgvector similarity search over indexed document chunks.
+
+### 8.2 Pipeline Flow
+
+```
+User Query
+  ↓
+[1. Embed Query] → OpenAI text-embedding-3-small (1536 dims)
+  ↓
+[2. Vector Search] → pgvector cosine distance, RETRIEVAL_LIMIT=20
+  ↓
+[3. Threshold Filter] → SIMILARITY_THRESHOLD=0.55 in JS
+  ↓  (if 0 results, retry with FALLBACK_SIMILARITY_THRESHOLD=0.35)
+  ↓
+[4. Recency Weighting] → score = similarity × (1 / (1 + ageDays/365))
+  ↓
+[5. Top-K Selection] → DEFAULT_LIMIT=8 chunks returned
+  ↓
+[6. Prompt Assembly] → System prompt + context blocks + user query
+  ↓
+[7. LLM Call] → GPT-4o-mini with response_format: json_object
+  ↓
+[8. Response Parse] → Extract answer, suggestedFollowups, token counts
+  ↓
+[9. Audit & Store] → prisma.query.create (chunk IDs, tokens, cost, latency)
+  ↓
+ChatResponse to frontend
+```
+
+### 8.3 Key Constants
+
+| Constant                        | Value                  | Description                                |
+| ------------------------------- | ---------------------- | ------------------------------------------ |
+| `SIMILARITY_THRESHOLD`          | 0.55                   | Primary cosine similarity cutoff           |
+| `FALLBACK_SIMILARITY_THRESHOLD` | 0.35                   | Retry threshold when no results at primary |
+| `DEFAULT_LIMIT`                 | 8                      | Max chunks returned to prompt              |
+| `RETRIEVAL_LIMIT`               | 20                     | Max rows fetched from pgvector             |
+| `RECENCY_SCALE_DAYS`            | 365                    | Half-life for recency weighting            |
+| `CHAT_MODEL`                    | gpt-4o-mini            | LLM used for answer generation             |
+| `EMBEDDING_MODEL`               | text-embedding-3-small | Embedding model (1536 dims)                |
+
+### 8.4 Two-Pass Search Strategy
+
+For broad or general queries that may not match any chunks at the default threshold:
+
+1. **Pass 1:** Search with `SIMILARITY_THRESHOLD = 0.55`
+2. **Pass 2 (fallback):** If Pass 1 returns 0 results, retry with `FALLBACK_SIMILARITY_THRESHOLD = 0.35`
+3. If still no results, the LLM responds with "No matching documents found" guidance
+
+### 8.5 Cost Tracking
+
+Every query logs estimated INR cost:
+
+```
+costInr = (promptTokens × 0.15 + completionTokens × 0.6) / 1_000_000 × 83.5
+```
 
 ---
 
 ## 9 — Background Job Architecture
 
-_To be detailed after BullMQ workers are implemented. Currently scaffolded in POST /api/sync/_ endpoints.\*
+### 9.1 Overview
+
+All heavy I/O work runs asynchronously via BullMQ workers backed by Redis. Four workers start on server boot in `apps/api/src/index.ts`.
+
+### 9.2 Worker Inventory
+
+| Worker     | Queue        | File                           | Concurrency | Purpose                                             |
+| ---------- | ------------ | ------------------------------ | ----------- | --------------------------------------------------- |
+| Gmail Sync | `sync`       | `workers/gmail-sync.worker.ts` | 2           | Fetch emails via Gmail API, create Document records |
+| Drive Sync | `sync`       | `workers/drive-sync.worker.ts` | 2           | Fetch files via Drive API, create Document records  |
+| Extraction | `extraction` | `workers/extraction.worker.ts` | 3           | Download content, extract text, chunk, store        |
+| Embedding  | `embedding`  | `workers/embedding.worker.ts`  | 1           | Batch embed chunks via OpenAI, store vectors        |
+
+### 9.3 Job Pipeline
+
+```
+[User clicks Sync] → POST /api/sync/gmail or /drive
+  ↓
+SyncJob created in DB + BullMQ job enqueued
+  ↓
+[Gmail/Drive Worker] → Fetches messages/files → Creates Document records
+  ↓ (enqueues extraction job per document)
+[Extraction Worker] → Downloads content → extractText() → chunkText() → chunk.createMany()
+  ↓ (enqueues embedding job when document status = ready)
+[Embedding Worker] → embedChunks() → UPDATE chunks SET embedding via raw SQL
+```
+
+### 9.4 Job Configuration
+
+| Setting           | Value                 | Notes                                             |
+| ----------------- | --------------------- | ------------------------------------------------- |
+| Max retries       | 3                     | All queues                                        |
+| Backoff           | Exponential, 15s base | Prevents API hammering                            |
+| Job ID format     | `<type>-<documentId>` | **No colons** (BullMQ uses `:` in Redis keys)     |
+| Dedup on re-queue | Timestamp suffix      | `extract-<id>-<Date.now()>` to avoid BullMQ dedup |
+
+### 9.5 Critical Implementation Notes
+
+1. **Prisma `Bytes` fields** return `Uint8Array`, not `Buffer`. All workers must use `Buffer.from(field).toString("utf8")` before decryption.
+2. **BullMQ job IDs must NOT contain colons** — they conflict with the Redis key format `bull:<queue>:<jobId>`.
+3. **Gmail attachment extraction**: The extraction worker recursively collects all MIME attachment parts (`collectAttachmentParts()`) and downloads each via `gmail.users.messages.attachments.get()`, combining body + attachment text.
+4. **pgvector column protection**: The `embedding` column uses `Unsupported("vector(1536)")` in Prisma schema to prevent `migrate dev` from auto-dropping it.
 
 ---
 
@@ -493,14 +592,14 @@ _To be detailed after BullMQ workers are implemented. Currently scaffolded in PO
 
 ### 10.1 Route Organization
 
-All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **17 total endpoints** implemented/scaffolded:
+All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **19 total endpoints** across 6 routers:
 
 #### **Auth Routes** (`/api/auth/*` — 4 endpoints)
 
-- `GET /google` — Initiate Google OAuth consent flow (scaffolded)
-- `GET /google/callback` — Exchange authorization code for tokens (scaffolded)
-- `POST /logout` — Revoke session (implemented)
-- `GET /me` — Return authenticated user + firm context (implemented, requires `requireAuth`)
+- `GET /google` — Initiate Google OAuth consent flow (✅ Live)
+- `GET /google/callback` — Exchange authorization code for tokens, encrypt refresh token, upsert User+Firm, issue JWT (✅ Live)
+- `POST /logout` — Revoke session (✅ Live, Redis blacklist planned)
+- `GET /me` — Return authenticated user + firm context (✅ Live, requires `requireAuth`)
 
 #### **Documents Routes** (`/api/documents/*` — 4 endpoints)
 
@@ -511,9 +610,14 @@ All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envel
 
 #### **Chat Routes** (`/api/chat/*` — 3 endpoints)
 
-- `POST /` — Submit RAG query with optional client/date filters (scaffolded, returns 501)
-- `GET /history` — Query history with pagination (implemented)
-- `POST /:queryId/feedback` — Record positive/negative/none feedback (implemented)
+- `POST /` — Submit RAG query: embed query → pgvector search → GPT-4o-mini → grounded answer with citations (✅ Live)
+- `GET /history` — Query history with pagination (✅ Live)
+- `POST /:queryId/feedback` — Record positive/negative/none feedback (✅ Live)
+
+#### **Drafts Routes** (`/api/drafts/*` — 2 endpoints)
+
+- `POST /` — Generate AI email draft with optional RAG context (✅ Live)
+- `POST /refine` — Refine existing draft with new instructions (✅ Live)
 
 #### **Sync Routes** (`/api/sync/*` — 4 endpoints)
 
@@ -608,37 +712,171 @@ chatRouter.post(
 
 ## 11 — Frontend Architecture
 
-_Planned for Phase 2: Next.js App Router, Tailwind CSS, React Hook Form + Zod validation._
+### 11.1 Overview
+
+The frontend is a **Next.js 14 App Router** application with **Tailwind CSS** utility classes. It lives in `apps/web/` and runs on port 3000.
+
+### 11.2 Route Structure
+
+```
+src/app/
+  layout.tsx              ← Root layout, wraps UserProvider
+  page.tsx                ← Root redirect: /chat or /sign-in
+  globals.css             ← Tailwind base + custom styles
+  sign-in/page.tsx        ← Google OAuth sign-in card
+  auth/
+    callback/page.tsx     ← OAuth callback, stores JWT
+    error/page.tsx        ← Auth error display
+  (app)/
+    layout.tsx            ← Protected layout, auth guard, AppNav sidebar
+    chat/page.tsx         ← RAG chat interface
+    documents/page.tsx    ← Documents dashboard
+    sync/page.tsx         ← Sync control centre
+    drafts/page.tsx       ← AI email drafting
+```
+
+### 11.3 Key Components
+
+| Component      | File                        | Purpose                                                          |
+| -------------- | --------------------------- | ---------------------------------------------------------------- |
+| `AppNav`       | `components/app-nav.tsx`    | Fixed 224px sidebar: firm name, nav links, user avatar, sign-out |
+| `UserProvider` | `contexts/user-context.tsx` | Auth context: fetches `/api/auth/me`, provides `useUser()` hook  |
+| `apiFetch`     | `lib/api.ts`                | Typed fetch wrapper with JWT `Authorization` header injection    |
+
+### 11.4 Page Features
+
+- **Chat**: History sidebar (30 recent queries), message thread with user/assistant/error bubbles, expandable source citations, follow-up chips, auto-resizing textarea, starter suggestions, thinking indicator
+- **Documents**: Sync Gmail/Drive buttons, active-sync banner with polling, filterable table (source + status), status badges, pagination
+- **Sync**: Gmail + Drive action cards, ref-based `setTimeout` polling (not `setInterval`), animated running indicator, duration column, per-job Cancel
+- **Drafts**: Instruction textarea, client-ID filter, context toggle, editable subject + body, Refine panel, Context Sources accordion, Copy-to-clipboard, cost/latency metadata
+
+### 11.5 Configuration
+
+- `output: "standalone"` for Docker builds
+- `transpilePackages: ["@ai-accounting/shared"]` for shared types
+- API base from `NEXT_PUBLIC_API_URL` env var (defaults to `http://localhost:4000`)
+- JWT stored in `localStorage` (planned migration to `HttpOnly` cookie)
 
 ---
 
 ## 12 — Security Architecture
 
-_Planned for Phase 2: OAuth 2.0 PKCE, JWT with refresh tokens, AES-256-GCM encryption, RLS enforcement at DB level._
+### 12.1 Authentication Flow
+
+```
+[Google OAuth 2.0] → Authorization Code → Exchange for tokens
+  ↓
+Refresh token encrypted with AES-256-GCM (per-user random 12-byte IV)
+  ↓
+Stored as BYTEA in PostgreSQL (google_refresh_token_enc + google_token_iv)
+  ↓
+JWT session token issued (15m expiry, HS256, issuer + audience validated)
+  ↓
+Stored in localStorage (production: planned migration to HttpOnly cookie)
+```
+
+### 12.2 Encryption Details
+
+| Component        | Algorithm   | Key Source                          |
+| ---------------- | ----------- | ----------------------------------- |
+| Refresh tokens   | AES-256-GCM | `ENCRYPTION_KEY` env var (32 bytes) |
+| JWT signing      | HS256       | `JWT_SECRET` env var (64 bytes)     |
+| Password hashing | N/A         | Google OAuth only, no passwords     |
+
+### 12.3 Auth Middleware
+
+- **`requireAuth`**: Verifies JWT from `Authorization: Bearer <token>` header. In dev mode, accepts `X-Dev-User` header as JSON bypass.
+- **`requireAdmin`**: Extends `requireAuth`, checks `req.user.role === 'admin'`.
+- **RLS enforcement**: Every authenticated request includes `req.user.firmId` for tenant isolation.
+
+### 12.4 Multi-Tenancy Security
+
+- PostgreSQL RLS policies on every table with `firm_id`
+- Application-level `firmId` filter on all Prisma queries
+- Workers decrypt tokens per-user: `Buffer.from(user.googleRefreshTokenEnc).toString("utf8")` then `decrypt()`
+
+### 12.5 Known Security Items (Dev OK, Production TODO)
+
+| Item              | Current State                  | Production Plan                         |
+| ----------------- | ------------------------------ | --------------------------------------- |
+| JWT storage       | localStorage                   | HttpOnly Set-Cookie                     |
+| Logout            | Stateless (client drops token) | Redis JWT blacklist                     |
+| Rate limiting     | Not enforced                   | Per-user 60 req/hr, per-firm 500 req/hr |
+| X-Dev-User bypass | Active in dev                  | Disabled via `NODE_ENV` check           |
 
 ---
 
 ## 13 — Infrastructure & Deployment
 
-_Planned for Phase 2: ECS Fargate, RDS PostgreSQL, ElastiCache Redis, CloudFront CDN, GitHub Actions CI/CD._
+### 13.1 Local Development
+
+```bash
+docker compose -f docker-compose.dev.yml up -d   # Postgres (pgvector) + Redis
+pnpm dev                                          # starts API :4000 + Web :3000
+```
+
+| Service    | Container        | Port | Image                  |
+| ---------- | ---------------- | ---- | ---------------------- |
+| PostgreSQL | postgres         | 5432 | pgvector/pgvector:pg16 |
+| Redis      | redis            | 6379 | redis:7-alpine         |
+| API        | host (tsx watch) | 4000 | —                      |
+| Web        | host (next dev)  | 3000 | —                      |
+
+### 13.2 Docker Compose (Full Stack)
+
+`docker-compose.yml` adds containerized API + Web services alongside Postgres + Redis. Both apps have multi-stage `Dockerfile`s.
+
+### 13.3 Production (Planned)
+
+AWS Mumbai (ap-south-1): ECS Fargate, RDS PostgreSQL, ElastiCache Redis, CloudFront CDN, GitHub Actions CI/CD.
 
 ---
 
 ## 14 — Observability & Monitoring
 
-_Planned for Phase 2: CloudWatch logs, structured JSON logging, distributed tracing, cost tracking per query._
+### 14.1 Current State
+
+- **Morgan** HTTP request logging (dev format)
+- **Structured console logging** in all workers with `[Worker Name]` prefixes
+- **Per-query cost tracking** in `queries` table (tokens, latency, INR cost)
+- **Audit log** table for all user actions
+- **BullMQ dashboard** available via Bull Board (not yet wired)
+
+### 14.2 Production (Planned)
+
+CloudWatch logs, structured JSON logging, distributed tracing, Sentry error tracking, Prometheus metrics, Grafana dashboards.
 
 ---
 
 ## 15 — Scalability Considerations
 
-_Planned for Phase 2: Connection pooling, query optimization, caching strategies, worker auto-scaling._
+### 15.1 Current Limits
+
+- **pgvector IVFFlat index** with `lists=100` — good for <1M vectors; switch to HNSW at scale
+- **Embedding worker concurrency=1** to respect OpenAI RPM limits
+- **BullMQ sync concurrency=2** per worker type
+- **Single Prisma client instance** with connection pooling
+
+### 15.2 Scaling Strategy (Future)
+
+- Connection pooling via PgBouncer
+- Worker auto-scaling on ECS Fargate
+- Query result caching in Redis
+- Self-hosted embedding model (BGE) to reduce OpenAI costs at >100 firms
 
 ---
 
 ## 16 — Disaster Recovery
 
-_Planned for Phase 2: RDS automated backups, S3 versioning, job queue retention, audit log archival._
+### 16.1 Current State
+
+- **Database**: Docker volume for local dev; production will use RDS automated daily backups with 7-day retention
+- **Job queue**: BullMQ jobs persisted in Redis; failed jobs retained for inspection and retry
+- **Documents**: Re-syncable from Gmail/Drive at any time (source of truth is Google)
+
+### 16.2 Production (Planned)
+
+RDS Multi-AZ, S3 versioning, Redis persistence (AOF), audit log archival to S3 Glacier.
 
 ---
 
