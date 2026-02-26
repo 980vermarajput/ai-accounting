@@ -4,11 +4,18 @@ import { requireAuth, requireAdmin } from "./auth";
 import { signJwt } from "../lib/auth";
 import type { JwtPayload } from "../lib/auth";
 
+// Mock Redis so isBlacklisted() always resolves to false (not blacklisted)
+vi.mock("../lib/redis", () => ({
+  getRedis: vi.fn(() => ({
+    get: vi.fn().mockResolvedValue(null),
+  })),
+}));
+
 const VALID_JWT_SECRET = "b".repeat(128);
 
 /** Minimal Express Request mock */
 function mockReq(headers: Record<string, string> = {}): Request {
-  return { headers } as unknown as Request;
+  return { headers, cookies: {} } as unknown as Request;
 }
 
 const mockRes = {} as Response;
@@ -79,7 +86,7 @@ describe("requireAuth", () => {
 
   // ── Bearer JWT ──────────────────────────────────────────────────
 
-  it("accepts a valid Bearer JWT and sets req.user", () => {
+  it("accepts a valid Bearer JWT and sets req.user", async () => {
     const token = signJwt(payload);
     const next = vi.fn() as unknown as NextFunction;
     // No X-Dev-User header — forces the real JWT path even in development
@@ -87,10 +94,14 @@ describe("requireAuth", () => {
 
     requireAuth(req, mockRes, next);
 
+    // Wait a tick for the async blacklist check to resolve
+    await vi.waitFor(() => {
+      expect(next).toHaveBeenCalledWith();
+    });
+
     expect(req.user?.userId).toBe(payload.userId);
     expect(req.user?.firmId).toBe(payload.firmId);
     expect(req.user?.role).toBe(payload.role);
-    expect(next).toHaveBeenCalledWith();
   });
 
   it("returns 401 when Authorization header is missing entirely", () => {

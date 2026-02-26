@@ -79,3 +79,11 @@ export const refineDraftSchema = z.object({
   instructions: z.string().min(1).max(2000),
 });
 export type RefineDraftInput = z.infer<typeof refineDraftSchema>;
+
+export const sendDraftSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1).max(500),
+  body: z.string().min(1),
+  threadId: z.string().optional(),
+});
+export type SendDraftInput = z.infer<typeof sendDraftSchema>;

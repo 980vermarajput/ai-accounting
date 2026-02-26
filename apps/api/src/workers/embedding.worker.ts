@@ -11,7 +11,8 @@
  * spikes on startup (each document may have 50–200 chunks).
  */
 
-import { Worker, Job } from "bullmq";
+import type { Job } from "bullmq";
+import { Worker } from "bullmq";
 import { getRedis } from "../lib/redis";
 import { prisma } from "../lib/prisma";
 import { embedChunks } from "../lib/embedder";

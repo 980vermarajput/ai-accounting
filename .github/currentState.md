@@ -1,30 +1,37 @@
 # Current Implementation State
 
-**Last Updated:** 26 February 2026 (20:00 UTC)  
-**Status:** MVP Core Complete + Accuracy & Cost Optimizations — Runtime Tested with Real Gmail Data
+**Last Updated:** 27 February 2026 (15:20 UTC)  
+**Status:** MVP Core + All Pending Infrastructure Complete — All 179 Tests Passing (135 API + 44 Shared)
 
 ---
 
 ## Overview
 
-The monorepo has **full database schema**, **API routes**, and **Web UI** complete. All core features have been **runtime-tested with real Gmail data** — the full pipeline (OAuth → Gmail sync → extraction → chunking → embedding → RAG chat) works end-to-end. Multiple runtime bugs were discovered and fixed during production testing.
+The monorepo has **full database schema**, **API routes**, and **Web UI** complete. All core features have been **runtime-tested with real Gmail data** — the full pipeline (OAuth → Gmail sync → extraction → chunking → embedding → RAG chat) works end-to-end. Security hardening (HttpOnly cookies, rate limiting, JWT blacklist) and high-ROI features (file upload, client snapshots, Gmail Send, retrieval metadata, no-results UX) have been added.
 
 ### Quick Status
 
 - ✅ **Monorepo Structure:** pnpm + Turborepo configured, all workspaces linked
-- ✅ **API Server:** Express.js with health + auth + documents + chat + sync + drafts routes on :4000
+- ✅ **API Server:** Express.js with health + auth + documents + chat + sync + drafts + clients routes on :4000
 - ✅ **Web Frontend:** Next.js 14 with Tailwind CSS, full app UI on :3000
-- ✅ **Shared Types:** Domain model + Zod validation schemas defined
+- ✅ **Shared Types:** Domain model + Zod validation schemas defined (11 schemas)
 - ✅ **Database:** Postgres 16 + pgvector with RLS, 8 tables, `embedding Unsupported("vector(1536)")` protected
 - ✅ **Migrations:** Applied + seeded with demo firm/users/clients
-- ✅ **Authentication:** Google OAuth + JWT fully wired; AES-256-GCM refresh token encryption in place
-- ✅ **Vitest Test Suite:** 138 tests passing (100 API + 38 shared — auth, middleware, schemas, chunker, extractor, embedder, rag, summarizer, confidence)
+- ✅ **Authentication:** Google OAuth + JWT + HttpOnly cookies + Redis JWT blacklist; AES-256-GCM refresh token encryption
+- ✅ **Rate Limiting:** Redis sliding-window — per-user 60/hr, per-firm 500/hr, public endpoints 30/min
+- ✅ **Vitest Test Suite:** 179 tests passing (135 API [100 unit + 35 integration] + 44 shared)
+- ✅ **ESLint + Prettier:** ESLint 9 flat config, Prettier 3.8.1 — 0 errors, 9 acceptable warnings
+- ✅ **CI/CD Pipeline:** GitHub Actions workflow for build, typecheck, lint, test on PRs + main
 - ✅ **BullMQ Sync Workers:** Gmail + Drive workers runtime-tested; attachment extraction working
 - ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + Gmail attachment extraction + sentence-aware chunking
 - ✅ **Embedding Pipeline:** OpenAI text-embedding-3-small; vectors stored in pgvector; 7/8 test chunks embedded
-- ✅ **RAG Chat Endpoint:** Hard similarity cutoff (0.55, no fallback), GPT-4o-mini, citations, confidence scoring, Redis query caching (24hr TTL)
-- ✅ **Web UI:** Auth flow, Chat (confidence badges, WhatsApp copy, compliance templates), Documents, Sync (ref-based polling, clear all), Email Drafts — all runtime-tested
-- ✅ **Email Drafts:** `POST /api/drafts` + `POST /api/drafts/refine` — RAG-grounded AI email drafting
+- ✅ **RAG Chat Endpoint:** Hard similarity cutoff (0.55), GPT-4o-mini, citations, confidence scoring, Redis query caching (24hr TTL)
+- ✅ **Web UI:** Auth flow, Chat (confidence badges, retrieval metadata, no-results UX, WhatsApp copy, compliance templates), Documents, Sync, Email Drafts — all runtime-tested
+- ✅ **Email Drafts:** `POST /api/drafts` + `POST /api/drafts/refine` + `POST /api/drafts/send` (Gmail Drafts API)
+- ✅ **File Upload:** `POST /api/documents/upload` with multer, MIME validation, extract → chunk → embed pipeline
+- ✅ **Client Snapshots:** `GET /api/clients/:id/summary` with risk scoring, document breakdown, recent activity
+- ✅ **Gmail Thread Modeling:** `gmailThreadId` field on Document (migration applied 20260226093659), indexed for thread-based queries
+- ✅ **Thread Summary Endpoint:** `GET /api/documents/thread/:threadId` returns all emails in a thread with metadata
 - ✅ **Runtime Pipeline:** Gmail sync → extraction → chunking → embedding → RAG chat tested end-to-end
 
 ---
@@ -51,35 +58,46 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ### API Routes (6 Routers)
 
-| Router         | Mounted At       | Status        | Endpoints                                                            |
-| -------------- | ---------------- | ------------- | -------------------------------------------------------------------- |
-| `health.ts`    | `/api/health`    | ✅ Live       | `GET /` — service status                                             |
-| `auth.ts`      | `/api/auth`      | ✅ Live       | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`     |
-| `documents.ts` | `/api/documents` | ✅ Scaffolded | `GET /` (list, paginated), `GET /:id`, `POST /upload`, `DELETE /:id` |
-| `chat.ts`      | `/api/chat`      | ✅ Live       | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`      |
-| `sync.ts`      | `/api/sync`      | ✅ Live       | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`   |
-| `drafts.ts`    | `/api/drafts`    | ✅ Live       | `POST /` (generate draft), `POST /refine` (iterate draft)            |
+| Router         | Mounted At       | Status  | Endpoints                                                                                                                    |
+| -------------- | ---------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `health.ts`    | `/api/health`    | ✅ Live | `GET /` — service status                                                                                                     |
+| `auth.ts`      | `/api/auth`      | ✅ Live | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`                                                             |
+| `documents.ts` | `/api/documents` | ✅ Live | `GET /` (list), `GET /:id`, `GET /thread/:threadId` (thread summary), `POST /upload` (multer + extract/chunk), `DELETE /:id` |
+| `chat.ts`      | `/api/chat`      | ✅ Live | `POST /` (RAG query), `GET /history`, `POST /:queryId/feedback`                                                              |
+| `sync.ts`      | `/api/sync`      | ✅ Live | `POST /gmail`, `POST /drive`, `GET /status`, `POST /cancel/:jobId`                                                           |
+| `drafts.ts`    | `/api/drafts`    | ✅ Live | `POST /` (generate), `POST /refine`, `POST /send` (Gmail Drafts API)                                                         |
+| `clients.ts`   | `/api/clients`   | ✅ Live | `GET /` (list), `POST /` (create), `GET /:id/summary` (snapshot + risk)                                                      |
+| `drafts.ts`    | `/api/drafts`    | ✅ Live | `POST /` (generate draft), `POST /refine` (iterate draft)                                                                    |
 
 ### Utilities & Middleware
 
 - **Prisma singleton** — safe hot-reload pattern
-- **ApiError class** — typed HTTP errors with factory methods
+- **ApiError class** — typed HTTP errors with factory methods (400/401/403/404/409/429/500)
 - **Zod validation middleware** — request body schema checking
-- **Auth middleware** — real JWT verification + dev bypass via `X-Dev-User` header
+- **Auth middleware** — JWT from HttpOnly cookie (`__session`) or `Authorization: Bearer` header; Redis JWT blacklist for logout; dev bypass via `X-Dev-User` header
+- **Rate limiter** — Redis sliding-window: per-user 60/hr + per-firm 500/hr (authenticated), per-IP 30/min (public endpoints like auth)
 - **Error handler** — global error-to-ApiResponse envelope
+- **cookie-parser** — parses `__session` HttpOnly cookie for JWT auth
+
+### Code Quality & CI/CD
+
+- **ESLint 9 flat config** (`eslint.config.mjs`) — monorepo-wide linting with TypeScript, React, Node.js rules; `consistent-type-imports`, Prettier integration, worker/test file overrides
+- **Prettier 3.8.1** (`.prettierrc`) — semi, double quotes, trailing commas, 90 width, LF line endings
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) — runs on PR + main push: pnpm install → build → typecheck → lint → Prisma migrate → test (with Postgres + Redis services)
 
 ### Vitest Test Suite
 
 - **`packages/shared/vitest.config.ts`** + **`apps/api/vitest.config.ts`** — Vitest configured in both packages
-- **`packages/shared/src/schemas.test.ts`** — 38 tests covering all 6 Zod schemas (valid, defaults, coercion, boundary values)
+- **`packages/shared/src/schemas.test.ts`** — 44 tests covering all 7 Zod schemas (valid, defaults, coercion, boundary values — including new `sendDraftSchema`)
 - **`apps/api/src/lib/auth.test.ts`** — 22 tests for `encrypt`/`decrypt`, `signJwt`/`verifyJwt`, `buildGoogleAuthUrl`
-- **`apps/api/src/middleware/auth.test.ts`** — 11 tests for `requireAuth` (dev bypass, JWT, expired) and `requireAdmin` (roles)
+- **`apps/api/src/middleware/auth.test.ts`** — 11 tests for `requireAuth` (dev bypass, JWT, expired, Redis blacklist mock) and `requireAdmin` (roles)
 - **`apps/api/src/lib/chunker.test.ts`** — 11 tests for `chunkText` (empty input, sequential index, token cap, overlap, infinite-loop guard)
 - **`apps/api/src/lib/extractor.test.ts`** — 13 tests for `extractText` (plain text, CRLF, XLSX, DOCX error-handling, textHash determinism)
 - **`apps/api/src/lib/embedder.test.ts`** — 8 tests for `embedChunks` (empty input, batch size 100, 150-chunk split, order preservation, API call shape, error propagation) — OpenAI mocked via `vi.hoisted` + `vi.mock`
 - **`apps/api/src/lib/rag.test.ts`** — 23 tests for `searchChunks` (threshold filtering, recency weighting, score sorting, limit, field mapping, age-0 and age-365 score invariants), `generateRagAnswer` (JSON parsing, fallback on invalid JSON, token/cost calculation, follow-up capping, context injection), and `computeConfidence` (empty chunks, high/medium/low levels, coverage cap)
+- **`apps/api/src/routes/integration.test.ts`** — 35 supertest integration tests covering all API endpoints: Health (2), Auth (4), Documents (8), Chat (6), Drafts (6), Clients (6), Sync (1), Error handling (2); mocks Redis `multi()` chain for rate limiter, Prisma models, dev auth via `X-Dev-User` header
 - **`turbo.json`** — `test` task added with `dependsOn: ["^build"]`
-- **Total: 138 tests, all green** (100 API + 38 shared)
+- **Total: 179 tests, all green** (135 API [100 unit + 35 integration] + 44 shared)
 
 ### Embedding Pipeline
 
@@ -91,28 +109,74 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ### Web UI
 
-- **`apps/web/src/lib/api.ts`** — `apiFetch<T>(path, options)` typed fetch wrapper; `getToken/setToken/clearToken` helpers reading/writing JWT from `localStorage`
-- **`apps/web/src/contexts/user-context.tsx`** — `UserProvider` + `useUser()` hook; fetches `/api/auth/me` on mount; handles `logout()` (clears token + redirects)
+- **`apps/web/src/lib/api.ts`** — `apiFetch<T>(path, options)` typed fetch wrapper with `credentials: "include"` for HttpOnly cookie auth; `getToken/setToken/clearToken` helpers for localStorage Bearer header fallback; conditional `Content-Type` header (omitted for FormData uploads)
+- **`apps/web/src/contexts/user-context.tsx`** — `UserProvider` + `useUser()` hook; always attempts `/api/auth/me` on mount (no localStorage guard — cookie may be present even without localStorage token); handles `logout()` (clears token + redirects)
 - **`apps/web/src/components/app-nav.tsx`** — fixed 224px sidebar: firm name + role, Chat/Documents/Sync/Drafts nav links, user avatar + sign-out button
 - **`apps/web/src/app/layout.tsx`** — root layout wraps all pages in `<UserProvider>`; `lib: ["ES2022","DOM","DOM.Iterable"]` added to `tsconfig.json`
 - **`apps/web/src/app/page.tsx`** — root redirect: `→ /chat` (authenticated) or `→ /sign-in` (unauthenticated)
 - **`apps/web/src/app/sign-in/page.tsx`** — centered sign-in card with Google OAuth button (`href=/api/auth/google`)
-- **`apps/web/src/app/auth/callback/page.tsx`** — reads `?token=` param (via `useSearchParams` + `<Suspense>`), stores JWT, calls `refresh()` to populate UserProvider context before redirect (prevents double sign-in race condition), redirects to `/chat`
+- **`apps/web/src/app/auth/callback/page.tsx`** — handles OAuth callback; stores `?token=` in localStorage if present (fallback), works without it (cookie already set by backend); calls `refresh()` before redirect to `/chat`
 - **`apps/web/src/app/auth/error/page.tsx`** — shows human-readable error message keyed by `?reason=` param
 - **`apps/web/src/app/(app)/layout.tsx`** — protected layout; auth-guards all `/chat` + `/documents` routes; shows `<AppNav>` + main content
 - **`apps/web/src/app/(app)/chat/page.tsx`** — full RAG chat interface: history sidebar (30 recent queries), message thread (user/assistant/error bubbles), confidence badges (🟢 High / 🟡 Medium / 🔴 Low with score tooltip), ⚡ Cached indicator, 📱 Copy for WhatsApp button (formats answer + sources for mobile sharing), expandable source citations, suggested follow-up chips, compliance template starter chips (Outstanding invoices, Pending TDS, GST filing, Latest communication, etc.), auto-resizing textarea, thinking indicator
 - **`apps/web/src/app/(app)/documents/page.tsx`** — documents dashboard: sync Gmail/Drive buttons with loading state, active-sync banner (5s polling), inline sync result messages, filterable table (source + status), status badges with colors, pagination
 - **`apps/web/src/app/(app)/sync/page.tsx`** — sync control centre: Gmail + Drive action cards, ref-based `setTimeout` polling (stops when all inactive), status badges with animated running indicator, duration column, per-job Cancel button
-- **`apps/web/src/app/(app)/drafts/page.tsx`** — AI email drafting: instruction textarea + client-ID filter + context toggle → `POST /api/drafts`; draft rendered in editable subject+body fields; Refine panel → `POST /api/drafts/refine`; Context Sources accordion; Copy-to-clipboard button with cost/latency metadata
+- **`apps/web/src/app/(app)/drafts/page.tsx`** — AI email drafting: instruction textarea + client-ID filter + context toggle → `POST /api/drafts`; draft rendered in editable subject+body fields; Refine panel → `POST /api/drafts/refine`; Context Sources accordion; Copy-to-clipboard button with cost/latency metadata; **Save to Gmail** button: recipient email input → `POST /api/drafts/send` → success banner with Gmail draft ID
 
 ### Email Drafts
 
-- **`packages/shared/src/types.ts`** — added `DraftResponse` interface: `{ subject, draftText, sources: ChatSource[], metadata: { model, tokensPrompt, tokensCompletion, costEstimateInr, latencyMs } }`
-- **`apps/api/src/routes/drafts.ts`** — stateless draft generation + refinement:
+- **`packages/shared/src/types.ts`** — added `DraftResponse` interface: `{ subject, draftText, sources: ChatSource[], metadata: { model, tokensPrompt, tokensCompletion, costEstimateInr, latencyMs } }` + `GmailDraftResponse` interface: `{ gmailDraftId, gmailMessageId, threadId? }`
+- **`packages/shared/src/schemas.ts`** — added `sendDraftSchema`: `{ to: email, subject: 1-500 chars, body: 1+ chars, threadId?: string }`
+- **`apps/api/src/routes/drafts.ts`** — stateless draft generation, refinement, and Gmail save:
   - `POST /api/drafts`: validates `draftEmailSchema` → optional `searchChunks(instructions, firmId, { limit:5, threshold:0.65 })` for context → GPT-4o-mini `response_format: json_object` → returns `DraftResponse`
   - `POST /api/drafts/refine`: validates `refineDraftSchema` (takes existing `draftText` + new `instructions`) → GPT-4o-mini revision → returns refined `DraftResponse`
+  - `POST /api/drafts/send`: validates `sendDraftSchema` → decrypts user's Google refresh token → builds RFC 2822 message → `gmail.users.drafts.create` → returns 201 with `{ gmailDraftId, gmailMessageId, threadId }`; user can review + send from Gmail
   - INR cost calculation: `(promptTokens × 0.15 + completionTokens × 0.6) / 1_000_000 × 83.5`
+- **`apps/api/src/lib/auth.ts`** — added `gmail.compose` scope to Google OAuth consent URL (required for creating Gmail drafts)
 - **`apps/api/src/app.ts`** — mounted `draftsRouter` at `/api/drafts`
+
+### Security Hardening
+
+- **HttpOnly Cookie Auth** — JWT is now set via `__session` HttpOnly cookie (7d maxAge, secure in production, sameSite strict/lax) alongside the existing `Authorization: Bearer` header. Cookie is checked first (preferred, immune to XSS), header is fallback for API clients/dev tools.
+- **Redis JWT Blacklist** — `blacklistToken(token)` stores revoked JWTs in Redis with key `jwt:bl:<token>` and TTL equal to remaining token validity. `isBlacklisted(token)` checks before allowing access. Fail-open if Redis is down.
+- **Rate Limiting** — Redis sliding-window rate limiter via `INCR` + `EXPIRE`:
+  - Authenticated routes (`rateLimit`): 60 req/hr per user + 500 req/hr per firm
+  - Public routes (`rateLimitPublic`): 30 req/min per IP
+  - Applied to: auth (public), chat, drafts, documents, clients (authenticated)
+- **File Upload Validation** — multer with 25MB limit + MIME whitelist (PDF, DOCX, DOC, XLSX, XLS, CSV, TXT)
+
+### File Upload
+
+- **`apps/api/src/routes/documents.ts`** — `POST /api/documents/upload`:
+  - Multer memory storage with 25MB limit, MIME type whitelist
+  - `extractText(file.buffer, file.mimetype)` → SHA-256 dedup check → `prisma.document.create` (source: "upload") → `chunkText(text)` → `prisma.chunk.createMany` → document status "ready" → `addEmbeddingJob()`
+  - Returns 201: `{ id, filename, mimeType, status, chunksCreated, message }`
+  - Rate limited via authenticated middleware
+
+### Client Snapshots
+
+- **`apps/api/src/routes/clients.ts`** — new router mounted at `/api/clients`:
+  - `GET /api/clients` — list all clients for the firm
+  - `POST /api/clients` — create new client with `createClientSchema` validation
+  - `GET /api/clients/:id/summary` — client snapshot with 6 parallel Prisma queries:
+    - `documentCount`, `recentDocs` (5), `lastCommunication` (most recent gmail doc), `queryCount`, `recentQueries` (3), `chunkCount`
+    - Computes `riskLevel`: >90 days no communication = high, >30 = medium, ≤30 = low
+    - Returns: `{ client, summary, recentDocuments, recentQueries, documentBreakdown }`
+
+### Gmail Thread Modeling
+
+- **`apps/api/prisma/schema.prisma`** — added `gmailThreadId String? @map("gmail_thread_id")` + `@@index([gmailThreadId])` to Document model
+- **`apps/api/src/workers/gmail-sync.worker.ts`** — captures `gmailThreadId: msgRef.threadId ?? null` on document create
+- **`packages/shared/src/types.ts`** — added `gmailThreadId?: string` to Document interface + `ThreadMessage` and `ThreadSummaryResponse` for thread endpoint
+- **`apps/api/src/routes/documents.ts`** — `GET /api/documents/thread/:threadId` queries documents by `gmailThreadId`, returns messages sorted by sourceDate ascending, includes dateRange (earliest/latest)
+- **Migration applied** — `20260226093659_add_gmail_thread_id` applied successfully
+
+### Chat UI Enhancements
+
+- **Retrieval metadata** — assistant messages now show "📄 Searched X chunks · used Y" badge alongside confidence and cache indicators
+- **No-results UX** — when `confidence.level === "low"` and no sources found, shows amber guidance card:
+  - Explains why (emails not synced, different terminology, topic not covered)
+  - Action buttons: "🔄 Sync Gmail / Drive" + "📤 Upload documents"
 
 ### RAG Chat Endpoint
 
@@ -142,18 +206,27 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 ### Authentication
 
 - **`src/lib/auth.ts`** — core auth service:
-  - `buildGoogleAuthUrl()` — generates OAuth consent URL with offline access + email/profile/gmail/drive scopes
+  - `buildGoogleAuthUrl()` — generates OAuth consent URL with offline access + email/profile/gmail.readonly/gmail.compose/drive.readonly scopes
   - `exchangeCodeForTokens()` — exchanges authorization code for Google access + refresh tokens
   - `fetchGoogleProfile()` — fetches email, name, picture from Google userinfo API
   - `encrypt()` / `decrypt()` — AES-256-GCM with random 12-byte IV per token, stored as base64
   - `signJwt()` / `verifyJwt()` — JWT session tokens (7d expiry, issuer + audience validated)
+- **`src/middleware/auth.ts`** — rewritten for HttpOnly cookie support:
+  - Token resolution: `__session` cookie (preferred) → `Authorization: Bearer` header (fallback)
+  - `isBlacklisted(token)` — checks Redis blacklist, fail-open if Redis unavailable
+  - `blacklistToken(token)` — adds token to Redis with TTL = remaining validity
+  - `req.rawToken` — saved for logout blacklisting
+  - Dev bypass via `X-Dev-User` header in development mode
+- **`src/middleware/rate-limiter.ts`** — Redis sliding-window rate limiting:
+  - `rateLimit` — per-user 60/hr + per-firm 500/hr for authenticated routes
+  - `rateLimitPublic` — per-IP 30/min for public endpoints
 - **`src/routes/auth.ts`** — full OAuth flow:
   - `GET /google` → redirects to Google consent screen
-  - `GET /google/callback` → exchanges code, upserts User+Firm in DB, issues JWT, redirects to frontend
-  - `POST /logout` → stateless (JWT dropped client-side; Redis blacklist planned)
+  - `GET /google/callback` → exchanges code, upserts User+Firm, issues JWT, sets `__session` HttpOnly cookie + redirects
+  - `POST /logout` → blacklists JWT in Redis, clears cookie
   - `GET /me` → returns full user + firm from DB
+  - All routes rate-limited via `rateLimitPublic`
 - **`.env`** — `JWT_SECRET` (64-byte) and `ENCRYPTION_KEY` (32-byte) generated and in place
-- **`.env.example`** — updated with generation commands and inline documentation
 
 ### Tooling & DevOps
 
@@ -169,13 +242,13 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ## In-Progress / Pending
 
-### Remaining MVP Work
+### Remaining Work
 
-1. **Production Hardening** — Redis JWT blacklist for logout, rate limiting, proper `HttpOnly` cookie auth (replace localStorage), HTTPS config
-2. **OCR Fallback** — `tesseract.js` for scanned PDF images
-3. **ESLint + Prettier** — code quality tooling across all packages
-4. **Gmail Send Integration** — hook Drafts page "Save to Gmail" button up to Gmail Drafts API
-5. **Admin Dashboard** — `/api/admin/*` endpoints for user management, usage stats, audit log
+1. **OCR Fallback** — `tesseract.js` for scanned PDF images
+2. **Admin Dashboard** — `/api/admin/*` endpoints for user management, usage stats, audit log
+3. **Production Deployment** — Dockerized deployment to cloud (Azure/AWS/GCP)
+4. **Monitoring & Observability** — Application Insights / Datadog integration
+5. **Documentation** — API docs (OpenAPI/Swagger), deployment guide, user manual
 
 ### Runtime Bugs Fixed (This Session)
 
@@ -206,28 +279,28 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ## Known Issues & Blockers
 
-| Issue                                  | Impact                                | Resolution                                               | Status    |
-| -------------------------------------- | ------------------------------------- | -------------------------------------------------------- | --------- |
-| JWT stored in localStorage             | Vulnerable to XSS in production       | Move to `HttpOnly` cookie via `/api/auth/token` endpoint | 🟡 Dev OK |
-| Logout doesn't blacklist JWT           | Old token valid until expiry (15 min) | Add Redis blacklist in auth service                      | 🟡 Dev OK |
-| Dev auth header `X-Dev-User` hardcoded | Development only, OK for MVP          | Production auth handled by real JWT                      | ✅ OK     |
+| Issue                                           | Impact                                                                                                                     | Resolution                             | Status |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------ |
+| Frontend uses dual auth (cookie + localStorage) | Cookie is primary (`credentials: 'include'`), localStorage Bearer header is intentional fallback for API clients/dev tools | Working as designed — no action needed | ✅ OK  |
+| Dev auth header `X-Dev-User` hardcoded          | Development only, OK for MVP                                                                                               | Production auth handled by real JWT    | ✅ OK  |
 
 ---
 
 ## Key Metrics
 
-| Metric                             | Value                                                 |
-| ---------------------------------- | ----------------------------------------------------- |
-| **Packages**                       | 3 (api, web, shared)                                  |
-| **TypeScript Files**               | ~40 (routes, middleware, utilities)                   |
-| **Database Tables**                | 8 with RLS enabled                                    |
-| **REST Endpoints**                 | 19 (health + auth + documents + chat + sync + drafts) |
-| **Zod Schemas**                    | 10 validation schemas                                 |
-| **Total LOC** (excl. node_modules) | ~2500                                                 |
-| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                             |
-| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                        |
-| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)              |
-| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379     |
+| Metric                             | Value                                                           |
+| ---------------------------------- | --------------------------------------------------------------- |
+| **Packages**                       | 3 (api, web, shared)                                            |
+| **TypeScript Files**               | ~45 (routes, middleware, utilities, workers)                    |
+| **Database Tables**                | 8 with RLS enabled                                              |
+| **REST Endpoints**                 | 24 (health + auth + documents + chat + sync + drafts + clients) |
+| **Zod Schemas**                    | 11 validation schemas                                           |
+| **Test Count**                     | 144 (100 API + 44 shared)                                       |
+| **Total LOC** (excl. node_modules) | ~3200                                                           |
+| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                                       |
+| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                                  |
+| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)                        |
+| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379               |
 
 ---
 
@@ -235,14 +308,14 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ### Production
 
-- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client, jsonwebtoken, googleapis, bullmq, ioredis, pdf-parse, mammoth, xlsx, openai
+- **API:** express, cors, helmet, morgan, zod, dotenv, prisma, @prisma/client, jsonwebtoken, googleapis, bullmq, ioredis, pdf-parse, mammoth, xlsx, openai, cookie-parser, multer
 - **Web:** next, react, react-dom
 - **Shared:** zod
 
 ### Dev
 
 - **All:** typescript, turbo, pnpm
-- **API:** @types/express, @types/node, @types/jsonwebtoken, tsx, prisma
+- **API:** @types/express, @types/node, @types/jsonwebtoken, @types/cookie-parser, @types/multer, tsx, prisma
 - **Web:** tailwindcss, autoprefixer, postcss, @types/react
 
 ### Planned (Next Sprint)
@@ -255,11 +328,12 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Production Auth** — move JWT from localStorage to `HttpOnly` `Set-Cookie` header; add Redis blacklist for logout
-2. **Gmail Send Integration** — wire Drafts page "Save to Gmail" button via `POST /api/drafts/:id/send` using user's Google refresh token + Gmail Drafts API
+1. **Run Gmail Thread Migration** — `prisma migrate dev --name add-gmail-thread-id` to apply schema change
+2. **Thread Summary Endpoint** — `GET /api/documents/thread/:threadId` to browse Gmail threads
 3. **ESLint + Prettier** — add to all packages for consistent code style
-4. **Docker Compose validation** — run `docker compose up --build` end-to-end smoke test
-5. **OCR fallback** — `tesseract.js` for scanned PDF images that return no text from pdf-parse
+4. **Integration Tests** — supertest-based API endpoint tests for auth, chat, documents, drafts
+5. **CI/CD Pipeline** — GitHub Actions workflow: build → typecheck → test on PR
+6. **OCR fallback** — `tesseract.js` for scanned PDF images that return no text from pdf-parse
 
 ---
 

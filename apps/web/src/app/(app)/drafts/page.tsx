@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { ApiResponse, DraftResponse } from "@ai-accounting/shared";
+import type {
+  ApiResponse,
+  DraftResponse,
+  GmailDraftResponse,
+} from "@ai-accounting/shared";
 import { apiFetch } from "@/lib/api";
 
 export default function DraftsPage() {
@@ -18,6 +22,13 @@ export default function DraftsPage() {
   // ─── Refine state ────────────────────────────────────────────────
   const [refineInstructions, setRefineInstructions] = useState("");
   const [isRefining, setIsRefining] = useState(false);
+
+  // ─── Gmail send state ────────────────────────────────────────────
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [gmailResult, setGmailResult] = useState<GmailDraftResponse | null>(
+    null,
+  );
 
   // ─── UI state ────────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -97,6 +108,37 @@ export default function DraftsPage() {
     await navigator.clipboard.writeText(full);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ─── Save to Gmail as draft ──────────────────────────────────────
+
+  const sendToGmail = async () => {
+    if (!recipientEmail.trim() || !draftText.trim()) return;
+    setIsSending(true);
+    setError(null);
+    setGmailResult(null);
+    try {
+      const res = await apiFetch<ApiResponse<GmailDraftResponse>>(
+        "/api/drafts/send",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            to: recipientEmail.trim(),
+            subject: draftSubject || "(no subject)",
+            body: draftText,
+          }),
+        },
+      );
+      if (res.success && res.data) {
+        setGmailResult(res.data);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to save draft to Gmail",
+      );
+    } finally {
+      setIsSending(false);
+    }
   };
 
   // ─── Render ──────────────────────────────────────────────────────
@@ -248,6 +290,47 @@ export default function DraftsPage() {
                     {copied ? "✓ Copied!" : "Copy"}
                   </button>
                 </div>
+              </div>
+
+              {/* Gmail save success banner */}
+              {gmailResult && (
+                <div className="mb-4 px-4 py-3 rounded-lg bg-green-50 text-green-700 border border-green-200 text-sm flex items-center gap-2">
+                  <span>✅</span>
+                  <span>
+                    Draft saved to Gmail!{" "}
+                    <span className="text-xs text-green-500">
+                      (ID: {gmailResult.gmailDraftId})
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              {/* Recipient + Save to Gmail */}
+              <div className="mb-4 flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
+                    Recipient Email
+                  </label>
+                  <input
+                    type="email"
+                    value={recipientEmail}
+                    onChange={(e) => {
+                      setRecipientEmail(e.target.value);
+                      setGmailResult(null);
+                    }}
+                    placeholder="client@example.com"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={() => void sendToGmail()}
+                  disabled={
+                    isSending || !recipientEmail.trim() || !draftText.trim()
+                  }
+                  className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                >
+                  {isSending ? "Saving…" : "💌 Save to Gmail"}
+                </button>
               </div>
 
               {/* Subject line */}

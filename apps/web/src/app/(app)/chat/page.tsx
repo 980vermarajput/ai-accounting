@@ -41,6 +41,8 @@ type AssistantMsg = {
   latencyMs: number;
   confidence: ConfidenceInfo;
   cached: boolean;
+  chunksRetrieved: number;
+  chunksUsed: number;
 };
 
 type ErrorMsg = {
@@ -205,12 +207,50 @@ function MessageBubble({
               ⚡ Cached
             </span>
           )}
+          {message.chunksRetrieved > 0 && (
+            <span className="text-xs text-gray-400">
+              📄 Searched {message.chunksRetrieved} chunks · used{" "}
+              {message.chunksUsed}
+            </span>
+          )}
         </div>
 
         {/* Answer */}
         <div className="rounded-2xl rounded-tl-sm bg-white border border-gray-200 px-4 py-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
           {message.content}
         </div>
+
+        {/* No-results guidance */}
+        {!hasSources && message.confidence.level === "low" && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm space-y-2">
+            <p className="font-medium text-amber-800">
+              ⚠️ No supporting documents found
+            </p>
+            <p className="text-amber-700 text-xs leading-relaxed">
+              The answer above is based on general knowledge, not your firm's
+              data. This may happen when:
+            </p>
+            <ul className="text-xs text-amber-700 list-disc list-inside space-y-0.5">
+              <li>Relevant emails or files haven't been synced yet</li>
+              <li>The query uses different terminology than your documents</li>
+              <li>The topic isn't covered in uploaded documents</li>
+            </ul>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <a
+                href="/sync"
+                className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
+              >
+                🔄 Sync Gmail / Drive
+              </a>
+              <a
+                href="/documents"
+                className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
+              >
+                📤 Upload documents
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Action buttons row */}
         <div className="flex items-center gap-3">
@@ -363,6 +403,8 @@ export default function ChatPage() {
             latencyMs: data.metadata.latencyMs,
             confidence: data.confidence,
             cached: data.metadata.cached,
+            chunksRetrieved: data.metadata.chunksRetrieved,
+            chunksUsed: data.metadata.chunksUsed,
           },
         ]);
 

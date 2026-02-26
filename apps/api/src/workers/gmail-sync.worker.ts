@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import { Worker, Job } from "bullmq";
+import type { Job } from "bullmq";
+import { Worker } from "bullmq";
 import { google } from "googleapis";
 import { getRedis } from "../lib/redis";
 import { prisma } from "../lib/prisma";
@@ -114,6 +115,7 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
           userId,
           source: "gmail",
           sourceId: msgRef.id,
+          gmailThreadId: msgRef.threadId ?? null,
           filename: subject.slice(0, 499),
           mimeType: "message/rfc822",
           // Synthetic S3 key — actual upload happens in the text-extraction phase

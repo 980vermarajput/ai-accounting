@@ -53,6 +53,7 @@ export interface Document {
   clientId?: string;
   source: DocumentSource;
   sourceId: string;
+  gmailThreadId?: string;
   filename: string;
   mimeType: string;
   s3Key: string;
@@ -155,6 +156,34 @@ export interface DraftResponse {
     tokensCompletion: number;
     costEstimateInr: number;
     latencyMs: number;
+  };
+}
+
+export interface GmailDraftResponse {
+  gmailDraftId: string;
+  gmailMessageId: string;
+  threadId?: string;
+}
+
+// ─── Gmail Thread ────────────────────────────────────
+
+export interface ThreadMessage {
+  id: string;
+  filename: string;
+  sourceId: string;
+  textExcerpt: string;
+  sourceDate: Date;
+  status: DocumentStatus;
+  summary?: string;
+}
+
+export interface ThreadSummaryResponse {
+  threadId: string;
+  messageCount: number;
+  messages: ThreadMessage[];
+  dateRange: {
+    earliest: Date;
+    latest: Date;
   };
 }
 

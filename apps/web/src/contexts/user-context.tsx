@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { apiFetch, getToken, clearToken } from "../lib/api";
+import { apiFetch, clearToken } from "../lib/api";
 import type { ApiResponse } from "@ai-accounting/shared";
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -46,11 +46,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
-    if (!getToken()) {
+    // On the server (SSR) we can't check cookies, so skip.
+    if (typeof window === "undefined") {
       setIsLoading(false);
       return;
     }
     try {
+      // Always attempt /me — the HttpOnly cookie may be present even if
+      // localStorage has no token (e.g. user cleared cache, fresh tab).
       const res = await apiFetch<ApiResponse<UserWithFirm>>("/api/auth/me");
       setUser(res.data ?? null);
     } catch {

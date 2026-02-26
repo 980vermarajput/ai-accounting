@@ -1,8 +1,9 @@
 /**
  * Drafts router — AI-powered email drafting for Indian CA firms.
  *
- * POST /api/drafts        — generate a new email draft (optionally RAG-grounded)
- * POST /api/drafts/refine — revise an existing draft based on new instructions
+ * POST /api/drafts          — generate a new email draft (optionally RAG-grounded)
+ * POST /api/drafts/refine   — revise an existing draft based on new instructions
+ * POST /api/drafts/send     — save draft to Gmail via Drafts API
  *
  * No persistence: the client owns the draft text and passes it back on refine.
  * This keeps the schema lean — we don't need a DB table for ephemeral drafts.
@@ -15,16 +16,30 @@ import {
   type NextFunction,
 } from "express";
 import OpenAI from "openai";
-import type { ApiResponse, DraftResponse } from "@ai-accounting/shared";
-import { draftEmailSchema, refineDraftSchema } from "@ai-accounting/shared";
+import { google } from "googleapis";
+import type {
+  ApiResponse,
+  DraftResponse,
+  GmailDraftResponse,
+} from "@ai-accounting/shared";
+import {
+  draftEmailSchema,
+  refineDraftSchema,
+  sendDraftSchema,
+} from "@ai-accounting/shared";
 import { requireAuth } from "../middleware/auth";
+import { rateLimit } from "../middleware/rate-limiter";
 import { validate } from "../middleware/validate";
 import { searchChunks } from "../lib/rag";
+import { prisma } from "../lib/prisma";
+import { decrypt } from "../lib/auth";
+import { ApiError } from "../lib/api-error";
 
 export const draftsRouter: Router = Router();
 
-// All draft routes require auth
+// All draft routes require auth + rate limiting
 draftsRouter.use(requireAuth);
+draftsRouter.use(rateLimit);
 
 // ─── OpenAI client (lazy singleton) ──────────────────────────────
 
@@ -232,6 +247,95 @@ Always respond with a JSON object containing exactly these two fields:
         },
       };
       res.json(response);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── POST /api/drafts/send — save draft to Gmail ─────────────────
+
+draftsRouter.post(
+  "/send",
+  validate(sendDraftSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { to, subject, body, threadId } = req.body as {
+        to: string;
+        subject: string;
+        body: string;
+        threadId?: string;
+      };
+      const { userId } = req.user!;
+
+      // 1. Load user + decrypt their Google refresh token
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { googleRefreshTokenEnc: true, email: true },
+      });
+
+      if (!user.googleRefreshTokenEnc) {
+        throw ApiError.badRequest(
+          "Google account not connected — sign in via Google OAuth to enable Gmail features.",
+        );
+      }
+
+      const refreshToken = decrypt(
+        Buffer.from(user.googleRefreshTokenEnc).toString("utf8"),
+      );
+
+      // 2. Create Google OAuth2 client
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI,
+      );
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+      // 3. Build RFC 2822 message
+      const messageParts = [
+        `From: ${user.email}`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        "Content-Type: text/plain; charset=utf-8",
+        "MIME-Version: 1.0",
+        "",
+        body,
+      ];
+      const rawMessage = Buffer.from(messageParts.join("\r\n"))
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      // 4. Create Gmail draft (not send — user can review + send from Gmail)
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const draftRes = await gmail.users.drafts.create({
+        userId: "me",
+        requestBody: {
+          message: {
+            raw: rawMessage,
+            ...(threadId ? { threadId } : {}),
+          },
+        },
+      });
+
+      const gmailDraftId = draftRes.data.id;
+      const gmailMessageId = draftRes.data.message?.id;
+
+      if (!gmailDraftId || !gmailMessageId) {
+        throw ApiError.internal("Gmail returned an incomplete draft response.");
+      }
+
+      const response: ApiResponse<GmailDraftResponse> = {
+        success: true,
+        data: {
+          gmailDraftId,
+          gmailMessageId,
+          threadId: draftRes.data.message?.threadId ?? undefined,
+        },
+      };
+      res.status(201).json(response);
     } catch (err) {
       next(err);
     }

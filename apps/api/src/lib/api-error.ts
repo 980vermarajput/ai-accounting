@@ -35,6 +35,13 @@ export class ApiError extends Error {
     return new ApiError(409, code, message);
   }
 
+  static tooManyRequests(
+    message = "Too many requests — please slow down",
+    code = "RATE_LIMIT_EXCEEDED",
+  ) {
+    return new ApiError(429, code, message);
+  }
+
   static internal(
     message = "Internal server error",
     code = "INTERNAL_SERVER_ERROR",

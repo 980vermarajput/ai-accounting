@@ -13,7 +13,9 @@
  *         then downloads binary files (PDF, DOCX, XLSX) as media streams.
  */
 
-import { Worker, Job } from "bullmq";
+import type { Job } from "bullmq";
+import type { Prisma } from "@prisma/client";
+import { Worker } from "bullmq";
 import { google } from "googleapis";
 import type { gmail_v1 } from "googleapis";
 import { getRedis } from "../lib/redis";
@@ -22,10 +24,7 @@ import { decrypt } from "../lib/auth";
 import { extractText } from "../lib/extractor";
 import { chunkText } from "../lib/chunker";
 import { addEmbeddingJob } from "../queues/embedding.queue";
-import {
-  generateDocumentSummary,
-  rebuildFirmSnapshot,
-} from "../lib/summarizer";
+import { generateDocumentSummary, rebuildFirmSnapshot } from "../lib/summarizer";
 import type { ExtractionJobData } from "../queues/extraction.queue";
 
 // ─── Gmail helpers ────────────────────────────────────────────────
@@ -34,9 +33,7 @@ import type { ExtractionJobData } from "../queues/extraction.queue";
  * Recursively walk a Gmail message MIME tree and return the first non-empty
  * plain-text body found.  Falls back to HTML stripped of tags.
  */
-function extractEmailBodyText(
-  payload: gmail_v1.Schema$MessagePart | undefined,
-): string {
+function extractEmailBodyText(payload: gmail_v1.Schema$MessagePart | undefined): string {
   if (!payload) return "";
 
   if (payload.mimeType === "text/plain" && payload.body?.data) {
@@ -166,14 +163,9 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
 
           if (attRes.data.data) {
             const attBuffer = Buffer.from(attRes.data.data, "base64url");
-            const { text: attText } = await extractText(
-              attBuffer,
-              att.mimeType,
-            );
+            const { text: attText } = await extractText(attBuffer, att.mimeType);
             if (attText) {
-              attachmentTexts.push(
-                `\n\n--- Attachment: ${att.filename} ---\n${attText}`,
-              );
+              attachmentTexts.push(`\n\n--- Attachment: ${att.filename} ---\n${attText}`);
               console.log(
                 `[Extraction] Job ${job.id}: extracted ${attText.length} chars from attachment "${att.filename}"`,
               );
@@ -242,9 +234,7 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
             "No text could be extracted from this document (unsupported format or empty file).",
         },
       });
-      console.warn(
-        `[Extraction] Job ${job.id}: no text for document ${documentId}`,
-      );
+      console.warn(`[Extraction] Job ${job.id}: no text for document ${documentId}`);
       return;
     }
 
@@ -329,13 +319,10 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
           where: { id: documentId },
           data: {
             summary: summaryResult.summary,
-            entities:
-              summaryResult.entities as unknown as import("@prisma/client").Prisma.InputJsonValue,
+            entities: summaryResult.entities as unknown as Prisma.InputJsonValue,
           },
         });
-        console.log(
-          `[Extraction] Job ${job.id}: summary generated for ${documentId}`,
-        );
+        console.log(`[Extraction] Job ${job.id}: summary generated for ${documentId}`);
 
         // Rebuild firm knowledge snapshot with the new summary
         await rebuildFirmSnapshot(firmId).catch((err) => {
@@ -384,23 +371,17 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
  * Call once on server boot alongside the sync workers.
  */
 export function startExtractionWorker(): Worker {
-  const worker = new Worker<ExtractionJobData>(
-    "extraction",
-    processExtraction,
-    {
-      connection: getRedis(),
-      concurrency: 3,
-    },
-  );
+  const worker = new Worker<ExtractionJobData>("extraction", processExtraction, {
+    connection: getRedis(),
+    concurrency: 3,
+  });
 
   worker.on("completed", (job) => {
     console.log(`[Extraction] Worker: job ${job.id} completed`);
   });
 
   worker.on("failed", (job, err) => {
-    console.error(
-      `[Extraction] Worker: job ${job?.id} failed — ${err.message}`,
-    );
+    console.error(`[Extraction] Worker: job ${job?.id} failed — ${err.message}`);
   });
 
   console.log("[Extraction] Worker started (concurrency: 3)");

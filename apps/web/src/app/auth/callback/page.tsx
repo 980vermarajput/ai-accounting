@@ -6,10 +6,14 @@ import { setToken } from "../../../lib/api";
 import { useUser } from "../../../contexts/user-context";
 
 /**
- * Reads `?token=` from the URL, stores in localStorage, then refreshes the
- * UserProvider context before redirecting. Without the refresh() call, the
- * context already finished loading with user=null (token wasn't set yet), and
- * AppLayout would immediately bounce back to /sign-in.
+ * Handles the OAuth callback redirect.
+ *
+ * The backend already sets the `__session` HttpOnly cookie before redirecting
+ * here, so the cookie is available immediately. We also store the token in
+ * localStorage as a fallback for the Authorization header.
+ *
+ * Then we call refresh() to re-fetch /api/auth/me (which now works via cookie)
+ * so the UserProvider context has a valid user before we navigate to /chat.
  */
 function CallbackHandler() {
   const router = useRouter();
@@ -23,15 +27,15 @@ function CallbackHandler() {
 
     const token = searchParams.get("token");
     if (token) {
+      // Store in localStorage as Bearer header fallback
       setToken(token);
-      // Re-fetch /api/auth/me with the new token so the context has a valid
-      // user before we navigate — prevents the "sign in twice" race condition.
-      refresh().then(() => {
-        router.replace("/chat");
-      });
-    } else {
-      router.replace("/auth/error?reason=no_token");
     }
+
+    // Cookie is already set by the backend redirect — refresh context
+    // to pick up the user session, then navigate.
+    refresh().then(() => {
+      router.replace("/chat");
+    });
   }, [router, searchParams, refresh]);
 
   return null;

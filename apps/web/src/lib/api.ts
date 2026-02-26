@@ -1,14 +1,17 @@
 /**
  * Typed API fetch wrapper for the @ai-accounting/api server.
  *
- * - Reads the JWT from localStorage on every request.
- * - Throws an Error with the API's error message on non-2xx responses.
- * - Safe to import in both server and client components (guards on window).
+ * Auth strategy (dual mechanism for backward compatibility):
+ *   1. HttpOnly cookie `__session` — sent automatically via `credentials: "include"`
+ *   2. `Authorization: Bearer` header — optional fallback from localStorage
+ *
+ * The API's auth middleware checks cookie first, then header.
+ * Safe to import in both server and client components (guards on window).
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-// ─── Token helpers ───────────────────────────────────────────────
+// ─── Token helpers (localStorage — legacy fallback) ──────────────
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -37,16 +40,28 @@ export async function apiFetch<T>(
   const { skipAuth = false, ...rest } = options;
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(rest.headers as Record<string, string> | undefined),
   };
 
+  // Don't set Content-Type for FormData — browser sets multipart boundary
+  const isFormData =
+    typeof FormData !== "undefined" && rest.body instanceof FormData;
+  if (!isFormData && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  // Attach Bearer token as fallback (cookie is preferred by the API)
   if (!skipAuth) {
     const token = getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...rest, headers });
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...rest,
+    headers,
+    // CRITICAL: send HttpOnly cookie cross-origin (Web :3000 → API :4000)
+    credentials: "include",
+  });
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;

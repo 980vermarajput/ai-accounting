@@ -6,6 +6,7 @@ import {
   createClientSchema,
   inviteUserSchema,
   feedbackSchema,
+  sendDraftSchema,
 } from "./schemas";
 
 // ─── googleCallbackSchema ─────────────────────────────────────────────────────
@@ -251,5 +252,69 @@ describe("feedbackSchema", () => {
 
   it("rejects a missing feedback field", () => {
     expect(() => feedbackSchema.parse({})).toThrow();
+  });
+});
+
+// ─── sendDraftSchema ──────────────────────────────────────────────────────────
+
+describe("sendDraftSchema", () => {
+  it("accepts a valid draft with required fields", () => {
+    const result = sendDraftSchema.parse({
+      to: "client@example.com",
+      subject: "GST Return Filing - Q4 2024",
+      body: "Dear Sir, Please find attached...",
+    });
+    expect(result.to).toBe("client@example.com");
+    expect(result.subject).toBe("GST Return Filing - Q4 2024");
+    expect(result.threadId).toBeUndefined();
+  });
+
+  it("accepts a draft with optional threadId", () => {
+    const result = sendDraftSchema.parse({
+      to: "client@example.com",
+      subject: "Re: ITR Filing",
+      body: "Thank you for your response.",
+      threadId: "thread-abc-123",
+    });
+    expect(result.threadId).toBe("thread-abc-123");
+  });
+
+  it("rejects an invalid email address", () => {
+    expect(() =>
+      sendDraftSchema.parse({
+        to: "not-an-email",
+        subject: "Test",
+        body: "Hello",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a missing subject", () => {
+    expect(() =>
+      sendDraftSchema.parse({
+        to: "client@example.com",
+        body: "Hello",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an empty body", () => {
+    expect(() =>
+      sendDraftSchema.parse({
+        to: "client@example.com",
+        subject: "Test",
+        body: "",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a subject over 500 characters", () => {
+    expect(() =>
+      sendDraftSchema.parse({
+        to: "client@example.com",
+        subject: "x".repeat(501),
+        body: "Hello",
+      }),
+    ).toThrow();
   });
 });

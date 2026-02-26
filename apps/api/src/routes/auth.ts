@@ -1,6 +1,8 @@
-import { Router, Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import type { ApiResponse } from "@ai-accounting/shared";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, blacklistToken } from "../middleware/auth";
+import { rateLimitPublic } from "../middleware/rate-limiter";
 import {
   buildGoogleAuthUrl,
   exchangeCodeForTokens,
@@ -11,6 +13,9 @@ import {
 import { prisma } from "../lib/prisma";
 
 export const authRouter: Router = Router();
+
+// Public auth endpoints get IP-based rate limiting
+authRouter.use(rateLimitPublic);
 
 // ─── GET /api/auth/google — redirect to Google OAuth consent ─────
 authRouter.get("/google", (req: Request, res: Response, next: NextFunction) => {
@@ -105,8 +110,19 @@ authRouter.get(
         role: user.role as "admin" | "member",
       });
 
-      // 6. Redirect to frontend with token in query param
-      //    Frontend stores it in memory / localStorage
+      // 6. Set HttpOnly cookie + redirect to frontend
+      //    Cookie is the primary auth mechanism (immune to XSS).
+      //    We also pass the token as a query param so the frontend can
+      //    still use Authorization header for API calls during transition.
+      const isProduction = process.env.NODE_ENV === "production";
+      res.cookie("__session", token, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? "strict" : "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days — matches JWT expiry
+      });
+
       res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
     } catch (err) {
       next(err);
@@ -115,9 +131,20 @@ authRouter.get(
 );
 
 // ─── POST /api/auth/logout — revoke session ─────────────────────
-authRouter.post("/logout", requireAuth, (_req: Request, res: Response) => {
-  // JWT is stateless — client drops the token.
-  // Full blacklisting via Redis will be added in a later phase.
+authRouter.post("/logout", requireAuth, async (req: Request, res: Response) => {
+  // Blacklist the JWT in Redis so it can't be reused
+  if (req.rawToken) {
+    await blacklistToken(req.rawToken);
+  }
+
+  // Clear the HttpOnly cookie
+  res.clearCookie("__session", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    path: "/",
+  });
+
   const response: ApiResponse = {
     success: true,
     data: { message: "Logged out successfully" },

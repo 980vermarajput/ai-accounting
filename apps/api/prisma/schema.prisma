@@ -130,23 +130,24 @@ model Client {
 // ─── Documents ───────────────────────────────────────
 
 model Document {
-  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  firmId       String         @map("firm_id") @db.Uuid
-  userId       String         @map("user_id") @db.Uuid
-  clientId     String?        @map("client_id") @db.Uuid
-  source       DocumentSource
-  sourceId     String         @map("source_id") @db.VarChar(500)
-  filename     String         @db.VarChar(500)
-  mimeType     String         @map("mime_type") @db.VarChar(100)
-  s3Key        String         @map("s3_key") @db.VarChar(500)
-  textHash     String         @map("text_hash") @db.VarChar(64)
-  textExcerpt  String?        @map("text_excerpt")
-  status       DocumentStatus @default(pending)
-  errorMessage String?        @map("error_message")
-  summary      String?
-  entities     Json?          @db.JsonB
-  sourceDate   DateTime       @map("source_date") @db.Timestamptz()
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId         String         @map("firm_id") @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  clientId       String?        @map("client_id") @db.Uuid
+  source         DocumentSource
+  sourceId       String         @map("source_id") @db.VarChar(500)
+  gmailThreadId  String?        @map("gmail_thread_id") @db.VarChar(255)
+  filename       String         @db.VarChar(500)
+  mimeType       String         @map("mime_type") @db.VarChar(100)
+  s3Key          String         @map("s3_key") @db.VarChar(500)
+  textHash       String         @map("text_hash") @db.VarChar(64)
+  textExcerpt    String?        @map("text_excerpt")
+  status         DocumentStatus @default(pending)
+  errorMessage   String?        @map("error_message")
+  summary        String?
+  entities       Json?          @db.JsonB
+  sourceDate     DateTime       @map("source_date") @db.Timestamptz()
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz()
 
   firm   Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
   user   User    @relation(fields: [userId], references: [id])
@@ -156,6 +157,7 @@ model Document {
   @@index([firmId])
   @@index([firmId, source])
   @@index([firmId, clientId])
+  @@index([gmailThreadId])
   @@map("documents")
 }
 

@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import { Worker, Job } from "bullmq";
+import type { Job } from "bullmq";
+import { Worker } from "bullmq";
 import { google } from "googleapis";
 import { getRedis } from "../lib/redis";
 import { prisma } from "../lib/prisma";

@@ -1,4 +1,5 @@
-import { Queue, Job } from "bullmq";
+import type { Job } from "bullmq";
+import { Queue } from "bullmq";
 import { getRedis } from "../lib/redis";
 
 // ─── Job payload ─────────────────────────────────────────────────

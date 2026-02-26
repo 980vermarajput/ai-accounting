@@ -1,4 +1,5 @@
-import { Router, Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import type {
   ApiResponse,
   ChatRequest,
@@ -8,6 +9,7 @@ import type {
 } from "@ai-accounting/shared";
 import { chatRequestSchema } from "@ai-accounting/shared";
 import { requireAuth } from "../middleware/auth";
+import { rateLimit } from "../middleware/rate-limiter";
 import { validate } from "../middleware/validate";
 import { prisma } from "../lib/prisma";
 import {
@@ -22,8 +24,9 @@ import { getRedis } from "../lib/redis";
 
 export const chatRouter: Router = Router();
 
-// All chat routes require authentication
+// All chat routes require authentication + rate limiting
 chatRouter.use(requireAuth);
+chatRouter.use(rateLimit);
 
 // ─── POST /api/chat — submit query → RAG pipeline ───────────────
 chatRouter.post(
