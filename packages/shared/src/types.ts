@@ -98,11 +98,19 @@ export interface ChatSource {
   relevanceScore: number;
 }
 
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface ConfidenceInfo {
+  level: ConfidenceLevel;
+  score: number;
+}
+
 export interface ChatResponse {
   queryId: string;
   answer: string;
   sources: ChatSource[];
   suggestedFollowups: string[];
+  confidence: ConfidenceInfo;
   metadata: {
     model: string;
     tokensPrompt: number;
@@ -112,6 +120,7 @@ export interface ChatResponse {
     retrievalLatencyMs: number;
     chunksRetrieved: number;
     chunksUsed: number;
+    cached: boolean;
   };
 }
 

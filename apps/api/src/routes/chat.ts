@@ -13,9 +13,12 @@ import { prisma } from "../lib/prisma";
 import {
   searchChunks,
   generateRagAnswer,
-  FALLBACK_SIMILARITY_THRESHOLD,
+  computeConfidence,
   type SearchResult,
+  type RagAnswer,
 } from "../lib/rag";
+import crypto from "crypto";
+import { getRedis } from "../lib/redis";
 
 export const chatRouter: Router = Router();
 
@@ -32,29 +35,83 @@ chatRouter.post(
       const { userId, firmId } = req.user!;
       const totalStart = Date.now();
 
-      // 1. Vector similarity search with optional filters
+      // ── Cache check ──────────────────────────────────────
+      const normalizedQuery = body.query
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+      const cacheKey = `chat:${crypto
+        .createHash("sha256")
+        .update(
+          `${firmId}:${normalizedQuery}:${body.clientId ?? ""}:${JSON.stringify(body.filters ?? {})}`,
+        )
+        .digest("hex")}`;
+
+      const redis = getRedis();
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        try {
+          const cachedData = JSON.parse(cached) as {
+            answer: string;
+            sources: ChatSource[];
+            suggestedFollowups: string[];
+            confidence: { level: string; score: number };
+            metadata: Record<string, unknown>;
+          };
+
+          // Still persist the query for history
+          const queryRecord = await prisma.query.create({
+            data: {
+              firmId,
+              userId,
+              clientId: body.clientId ?? null,
+              queryText: body.query,
+              responseText: cachedData.answer,
+              retrievedChunkIds: [],
+              chunksSentToLlm: 0,
+              llmModel: "cache",
+              llmTokensPrompt: 0,
+              llmTokensCompletion: 0,
+              llmCostInr: 0,
+              latencyMs: Date.now() - totalStart,
+              retrievalLatencyMs: 0,
+            },
+          });
+
+          const response: ApiResponse<ChatResponse> = {
+            success: true,
+            data: {
+              queryId: queryRecord.id,
+              ...cachedData,
+              metadata: {
+                ...cachedData.metadata,
+                latencyMs: Date.now() - totalStart,
+                cached: true,
+              },
+            } as ChatResponse,
+          };
+          res.json(response);
+          return;
+        } catch {
+          // Cache parse error — fall through to live query
+        }
+      }
+
+      // ── Live query ────────────────────────────────────────
+      // 1. Vector similarity search — hard cutoff at 0.55, NO fallback
       const retrievalStart = Date.now();
-      let searchResults = await searchChunks(body.query, firmId, {
+      const searchResults = await searchChunks(body.query, firmId, {
         clientId: body.clientId,
         dateFrom: body.filters?.dateFrom,
         dateTo: body.filters?.dateTo,
         sources: body.filters?.source,
       });
-
-      // Fallback: if no results at default threshold, retry with a lower
-      // threshold so general questions ("which firms?") still surface docs.
-      if (searchResults.length === 0) {
-        searchResults = await searchChunks(body.query, firmId, {
-          clientId: body.clientId,
-          dateFrom: body.filters?.dateFrom,
-          dateTo: body.filters?.dateTo,
-          sources: body.filters?.source,
-          threshold: FALLBACK_SIMILARITY_THRESHOLD,
-        });
-      }
       const retrievalLatencyMs = Date.now() - retrievalStart;
 
-      // 2. LLM generation grounded in retrieved chunks
+      // 2. Compute confidence from retrieved chunks
+      const confidence = computeConfidence(searchResults);
+
+      // 3. LLM generation grounded in retrieved chunks
       const ragAnswer = await generateRagAnswer(
         body.query,
         searchResults,
@@ -63,10 +120,10 @@ chatRouter.post(
 
       const latencyMs = Date.now() - totalStart;
 
-      // 3. Build ChatSource list — one entry per unique document (best chunk wins)
+      // 4. Build ChatSource list — one entry per unique document (best chunk wins)
       const sources = buildChatSources(searchResults);
 
-      // 4. Persist the query record for history + analytics
+      // 5. Persist the query record for history + analytics
       const queryRecord = await prisma.query.create({
         data: {
           firmId,
@@ -85,25 +142,57 @@ chatRouter.post(
         },
       });
 
-      // 5. Return the response
+      // 6. Build response
+      const responseData: ChatResponse = {
+        queryId: queryRecord.id,
+        answer: ragAnswer.answer,
+        sources,
+        suggestedFollowups: ragAnswer.suggestedFollowups,
+        confidence,
+        metadata: {
+          model: ragAnswer.model,
+          tokensPrompt: ragAnswer.tokensPrompt,
+          tokensCompletion: ragAnswer.tokensCompletion,
+          costEstimateInr: ragAnswer.costInr,
+          latencyMs,
+          retrievalLatencyMs,
+          chunksRetrieved: searchResults.length,
+          chunksUsed: searchResults.length,
+          cached: false,
+        },
+      };
+
+      // 7. Cache the response in Redis for 24 hours
+      try {
+        await redis.set(
+          cacheKey,
+          JSON.stringify({
+            answer: responseData.answer,
+            sources: responseData.sources,
+            suggestedFollowups: responseData.suggestedFollowups,
+            confidence: responseData.confidence,
+            metadata: {
+              model: responseData.metadata.model,
+              tokensPrompt: responseData.metadata.tokensPrompt,
+              tokensCompletion: responseData.metadata.tokensCompletion,
+              costEstimateInr: responseData.metadata.costEstimateInr,
+              latencyMs: responseData.metadata.latencyMs,
+              retrievalLatencyMs: responseData.metadata.retrievalLatencyMs,
+              chunksRetrieved: responseData.metadata.chunksRetrieved,
+              chunksUsed: responseData.metadata.chunksUsed,
+              cached: false,
+            },
+          }),
+          "EX",
+          86400, // 24 hours
+        );
+      } catch {
+        // Cache write failure is non-fatal
+      }
+
       const response: ApiResponse<ChatResponse> = {
         success: true,
-        data: {
-          queryId: queryRecord.id,
-          answer: ragAnswer.answer,
-          sources,
-          suggestedFollowups: ragAnswer.suggestedFollowups,
-          metadata: {
-            model: ragAnswer.model,
-            tokensPrompt: ragAnswer.tokensPrompt,
-            tokensCompletion: ragAnswer.tokensCompletion,
-            costEstimateInr: ragAnswer.costInr,
-            latencyMs,
-            retrievalLatencyMs,
-            chunksRetrieved: searchResults.length,
-            chunksUsed: searchResults.length,
-          },
-        },
+        data: responseData,
       };
       res.json(response);
     } catch (err) {

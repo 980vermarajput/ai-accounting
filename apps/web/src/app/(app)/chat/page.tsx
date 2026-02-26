@@ -13,6 +13,7 @@ import type {
   ApiResponse,
   ChatResponse,
   ChatSource,
+  ConfidenceInfo,
   PaginatedResponse,
 } from "@ai-accounting/shared";
 
@@ -38,6 +39,8 @@ type AssistantMsg = {
   followups: string[];
   queryId: string;
   latencyMs: number;
+  confidence: ConfidenceInfo;
+  cached: boolean;
 };
 
 type ErrorMsg = {
@@ -90,6 +93,48 @@ function SourceCard({ source }: { source: ChatSource }) {
   );
 }
 
+// ─── WhatsApp format helper ──────────────────────────────────────
+
+function formatForWhatsApp(content: string, sources: ChatSource[]): string {
+  let text = content;
+  if (sources.length > 0) {
+    text += "\n\n" + "─".repeat(20);
+    text += `\n_Sources (${sources.length}):_`;
+    sources.forEach((s) => {
+      text += `\n• ${s.filename} (${fmtDate(s.sourceDate)})`;
+    });
+  }
+  text += "\n\n_— AI Assistant for Accountants_";
+  return text;
+}
+
+const CONFIDENCE_STYLES = {
+  high: {
+    emoji: "🟢",
+    bg: "bg-green-50",
+    text: "text-green-700",
+    border: "border-green-200",
+  },
+  medium: {
+    emoji: "🟡",
+    bg: "bg-yellow-50",
+    text: "text-yellow-700",
+    border: "border-yellow-200",
+  },
+  low: {
+    emoji: "🔴",
+    bg: "bg-red-50",
+    text: "text-red-700",
+    border: "border-red-200",
+  },
+} as const;
+
+const CONFIDENCE_LABELS = {
+  high: "High Confidence — Based on closely matching documents",
+  medium: "Medium Confidence — Based on partially matching records",
+  low: "Low Confidence — Limited supporting documents",
+} as const;
+
 // ─── Message bubble ──────────────────────────────────────────────
 
 function MessageBubble({
@@ -128,6 +173,17 @@ function MessageBubble({
 
   // Assistant message
   const hasSources = message.sources.length > 0;
+  const conf = CONFIDENCE_STYLES[message.confidence.level];
+  const confLabel = CONFIDENCE_LABELS[message.confidence.level];
+  const [copied, setCopied] = useState(false);
+
+  const handleWhatsAppCopy = () => {
+    const text = formatForWhatsApp(message.content, message.sources);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   return (
     <div className="flex gap-3">
@@ -137,9 +193,34 @@ function MessageBubble({
       </div>
 
       <div className="flex-1 space-y-3 min-w-0">
+        {/* Confidence badge */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${conf.bg} ${conf.text} ${conf.border}`}
+          >
+            {conf.emoji} {confLabel}
+          </span>
+          {message.cached && (
+            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700">
+              ⚡ Cached
+            </span>
+          )}
+        </div>
+
         {/* Answer */}
         <div className="rounded-2xl rounded-tl-sm bg-white border border-gray-200 px-4 py-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
           {message.content}
+        </div>
+
+        {/* Action buttons row */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleWhatsAppCopy}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            title="Copy formatted for WhatsApp"
+          >
+            {copied ? <>✅ Copied!</> : <>📱 Copy </>}
+          </button>
         </div>
 
         {/* Sources toggle */}
@@ -280,6 +361,8 @@ export default function ChatPage() {
             followups: data.suggestedFollowups,
             queryId: data.queryId,
             latencyMs: data.metadata.latencyMs,
+            confidence: data.confidence,
+            cached: data.metadata.cached,
           },
         ]);
 
@@ -396,13 +479,15 @@ export default function ChatPage() {
                   spreadsheets. Get answers with source citations.
                 </p>
               </div>
-              {/* Starter suggestions */}
+              {/* Compliance template chips */}
               <div className="flex flex-wrap gap-2 justify-center mt-4 max-w-lg">
                 {[
-                  "What is the total GST payable for Q3?",
-                  "Show advance tax payments for Mehta Traders",
-                  "List all pending invoices above ₹1 lakh",
-                  "What were the TDS deductions in October?",
+                  "Show all outstanding invoices",
+                  "Pending TDS certificates for this quarter",
+                  "GST filing status summary",
+                  "Latest communication summary with clients",
+                  "Unpaid invoices above ₹1 lakh",
+                  "Upcoming compliance deadlines",
                 ].map((q) => (
                   <button
                     key={q}

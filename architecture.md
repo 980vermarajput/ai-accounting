@@ -489,49 +489,85 @@ The RAG pipeline is fully implemented in `apps/api/src/lib/rag.ts` and `apps/api
 ```
 User Query
   ↓
-[1. Embed Query] → OpenAI text-embedding-3-small (1536 dims)
+[1. Cache Check] → Redis lookup (SHA256 key: firmId:query:clientId:filters, 24hr TTL)
+  ↓  (cache hit → return cached response with cached:true, skip to step 10)
   ↓
-[2. Vector Search] → pgvector cosine distance, RETRIEVAL_LIMIT=20
+[2. Embed Query] → OpenAI text-embedding-3-small (1536 dims)
   ↓
-[3. Threshold Filter] → SIMILARITY_THRESHOLD=0.55 in JS
-  ↓  (if 0 results, retry with FALLBACK_SIMILARITY_THRESHOLD=0.35)
+[3. Vector Search] → pgvector cosine distance, RETRIEVAL_LIMIT=20
   ↓
-[4. Recency Weighting] → score = similarity × (1 / (1 + ageDays/365))
+[4. Hard Cutoff] → SIMILARITY_THRESHOLD=0.55 (no fallback — accuracy > recall)
   ↓
-[5. Top-K Selection] → DEFAULT_LIMIT=8 chunks returned
+[5. Recency Weighting] → score = similarity × (1 / (1 + ageDays/365))
   ↓
-[6. Prompt Assembly] → System prompt + context blocks + user query
+[6. Top-K Selection] → DEFAULT_LIMIT=8 chunks returned
   ↓
-[7. LLM Call] → GPT-4o-mini with response_format: json_object
+[7. Confidence Scoring] → computeConfidence(chunks) → {level, score}
   ↓
-[8. Response Parse] → Extract answer, suggestedFollowups, token counts
+[8. Prompt Assembly] → System prompt + firm snapshot + context blocks + user query
   ↓
-[9. Audit & Store] → prisma.query.create (chunk IDs, tokens, cost, latency)
+[9. LLM Call] → GPT-4o-mini with response_format: json_object
   ↓
-ChatResponse to frontend
+[10. Response Parse] → Extract answer, suggestedFollowups, token counts
+  ↓
+[11. Cache Write] → Redis SET with 24hr TTL (non-fatal on failure)
+  ↓
+[12. Audit & Store] → prisma.query.create (chunk IDs, tokens, cost, latency)
+  ↓
+ChatResponse to frontend (with confidence + cached fields)
 ```
 
 ### 8.3 Key Constants
 
-| Constant                        | Value                  | Description                                |
-| ------------------------------- | ---------------------- | ------------------------------------------ |
-| `SIMILARITY_THRESHOLD`          | 0.55                   | Primary cosine similarity cutoff           |
-| `FALLBACK_SIMILARITY_THRESHOLD` | 0.35                   | Retry threshold when no results at primary |
-| `DEFAULT_LIMIT`                 | 8                      | Max chunks returned to prompt              |
-| `RETRIEVAL_LIMIT`               | 20                     | Max rows fetched from pgvector             |
-| `RECENCY_SCALE_DAYS`            | 365                    | Half-life for recency weighting            |
-| `CHAT_MODEL`                    | gpt-4o-mini            | LLM used for answer generation             |
-| `EMBEDDING_MODEL`               | text-embedding-3-small | Embedding model (1536 dims)                |
+| Constant               | Value                  | Description                                 |
+| ---------------------- | ---------------------- | ------------------------------------------- |
+| `SIMILARITY_THRESHOLD` | 0.55                   | Hard cosine similarity cutoff (no fallback) |
+| `DEFAULT_LIMIT`        | 8                      | Max chunks returned to prompt               |
+| `RETRIEVAL_LIMIT`      | 20                     | Max rows fetched from pgvector              |
+| `RECENCY_SCALE_DAYS`   | 365                    | Half-life for recency weighting             |
+| `CHAT_MODEL`           | gpt-4o-mini            | LLM used for answer generation              |
+| `EMBEDDING_MODEL`      | text-embedding-3-small | Embedding model (1536 dims)                 |
+| `QUERY_CACHE_TTL`      | 86400 (24hr)           | Redis cache TTL for identical queries       |
 
-### 8.4 Two-Pass Search Strategy
+### 8.4 Hard Cutoff Strategy
 
-For broad or general queries that may not match any chunks at the default threshold:
+For financial/accounting data, **accuracy matters more than recall**. The pipeline uses a single-pass search with a hard similarity cutoff:
 
-1. **Pass 1:** Search with `SIMILARITY_THRESHOLD = 0.55`
-2. **Pass 2 (fallback):** If Pass 1 returns 0 results, retry with `FALLBACK_SIMILARITY_THRESHOLD = 0.35`
-3. If still no results, the LLM responds with "No matching documents found" guidance
+1. Search with `SIMILARITY_THRESHOLD = 0.55` — no fallback pass
+2. If 0 results pass the cutoff, the LLM responds with a "not enough information" guidance
+3. This prevents low-confidence hallucinated answers from surfacing to accountants
 
-### 8.5 Cost Tracking
+### 8.5 Confidence Scoring
+
+Every RAG response includes a `ConfidenceInfo { level, score }` computed by `computeConfidence(chunks)`:
+
+```
+score = avgSimilarity × 0.6 + coverageRatio × 0.3 + avgRecency × 0.1
+```
+
+| Component      | Weight | Calculation                                         |
+| -------------- | ------ | --------------------------------------------------- |
+| Avg Similarity | 0.6    | Mean cosine similarity of retrieved chunks          |
+| Coverage Ratio | 0.3    | `min(chunks.length / DEFAULT_LIMIT, 1)` — diversity |
+| Avg Recency    | 0.1    | Mean `1/(1 + ageDays/RECENCY_SCALE_DAYS)` per chunk |
+
+| Level    | Score Range | UI Badge  |
+| -------- | ----------- | --------- |
+| `high`   | > 0.75      | 🟢 High   |
+| `medium` | 0.55 – 0.75 | 🟡 Medium |
+| `low`    | < 0.55      | 🔴 Low    |
+
+### 8.6 Query Caching
+
+Redis-based semantic query caching reduces LLM costs for repeated questions:
+
+- **Key:** `chat:SHA256(firmId:normalizedQuery:clientId:filters)`
+- **TTL:** 24 hours (86400s)
+- **Cache hit:** Returns cached response with `cached: true` metadata, still persists query record for history
+- **Cache write:** After LLM response, non-fatal `redis.set()` — cache failures don't break the request
+- **Invalidation:** TTL-based only (24hr); document re-sync naturally expires stale cache entries
+
+### 8.7 Cost Tracking
 
 Every query logs estimated INR cost:
 

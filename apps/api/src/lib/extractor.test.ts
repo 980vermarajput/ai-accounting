@@ -93,7 +93,7 @@ describe("extractText", () => {
 
   // ── XLSX ──────────────────────────────────────────────────────
 
-  it("extracts CSV-like text from an XLSX buffer", async () => {
+  it("extracts semantic sentences from an XLSX buffer with column headers", async () => {
     // Build a minimal XLSX workbook in memory with the xlsx library
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
@@ -110,8 +110,12 @@ describe("extractText", () => {
       xlsxBuf,
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
-    expect(text).toContain("Mehta Traders");
-    expect(text).toContain("GSTIN");
+    // Should contain structured "Header: value" format
+    expect(text).toContain("Client: Mehta Traders");
+    expect(text).toContain("GSTIN: 27AAAAA0000A1Z5");
+    expect(text).toContain("Revenue: 5000000");
+    // Values should be pipe-separated
+    expect(text).toContain("|");
   });
 
   // ── DOCX ──────────────────────────────────────────────────────

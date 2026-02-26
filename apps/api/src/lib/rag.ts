@@ -24,9 +24,6 @@ import type { DocumentSource } from "@ai-accounting/shared";
 /** Minimum cosine similarity to include a chunk in results (0–1). */
 export const SIMILARITY_THRESHOLD = 0.55;
 
-/** Fallback threshold when the primary search returns no results. */
-export const FALLBACK_SIMILARITY_THRESHOLD = 0.35;
-
 /** Default max results returned to the caller after re-ranking. */
 export const DEFAULT_LIMIT = 8;
 
@@ -77,6 +74,13 @@ export interface SearchResult {
   score: number;
 }
 
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface ConfidenceInfo {
+  level: ConfidenceLevel;
+  score: number;
+}
+
 export interface RagAnswer {
   answer: string;
   suggestedFollowups: string[];
@@ -85,6 +89,47 @@ export interface RagAnswer {
   tokensCompletion: number;
   /** Estimated cost in Indian Rupees (two-decimal precision). */
   costInr: number;
+  /** Whether the answer was served from cache. */
+  cached?: boolean;
+}
+
+/**
+ * Compute a confidence score for a RAG answer based on:
+ *   - Average similarity of retrieved chunks (60% weight)
+ *   - Context coverage ratio — how many chunks vs DEFAULT_LIMIT (30% weight)
+ *   - Recency — average recency factor of chunks (10% weight)
+ *
+ * Returns { level, score } where level maps score to high/medium/low.
+ */
+export function computeConfidence(chunks: SearchResult[]): ConfidenceInfo {
+  if (chunks.length === 0) {
+    return { level: "low", score: 0 };
+  }
+
+  const avgSimilarity =
+    chunks.reduce((sum, c) => sum + c.similarity, 0) / chunks.length;
+
+  const coverageRatio = Math.min(chunks.length / DEFAULT_LIMIT, 1);
+
+  const now = Date.now();
+  const avgRecency =
+    chunks.reduce((sum, c) => {
+      const ageDays =
+        (now - new Date(c.sourceDate).getTime()) / (1000 * 60 * 60 * 24);
+      return sum + 1 / (1 + ageDays / RECENCY_SCALE_DAYS);
+    }, 0) / chunks.length;
+
+  const score =
+    Math.round(
+      (avgSimilarity * 0.6 + coverageRatio * 0.3 + avgRecency * 0.1) * 100,
+    ) / 100;
+
+  let level: ConfidenceLevel;
+  if (score > 0.75) level = "high";
+  else if (score >= 0.55) level = "medium";
+  else level = "low";
+
+  return { level, score };
 }
 
 // ─── Internal types ──────────────────────────────────────────────

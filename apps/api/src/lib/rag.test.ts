@@ -60,6 +60,7 @@ import { prisma } from "./prisma";
 import {
   searchChunks,
   generateRagAnswer,
+  computeConfidence,
   SIMILARITY_THRESHOLD,
   DEFAULT_LIMIT,
   RECENCY_SCALE_DAYS,
@@ -388,5 +389,87 @@ describe("generateRagAnswer", () => {
     const userMessage = opts.messages[1].content;
     expect(userMessage).toContain("ledger_q3.xlsx");
     expect(userMessage).toContain("Revenue for Q3 was ₹50 lakh.");
+  });
+});
+
+// ─── computeConfidence ───────────────────────────────────────────
+
+describe("computeConfidence", () => {
+  it("returns low with score 0 when no chunks are provided", () => {
+    const result = computeConfidence([]);
+    expect(result.level).toBe("low");
+    expect(result.score).toBe(0);
+  });
+
+  it("returns high confidence for many recent, highly similar chunks", () => {
+    const chunks = Array.from({ length: 8 }, (_, i) => ({
+      chunkId: `c${i}`,
+      chunkText: `text ${i}`,
+      documentId: `d${i}`,
+      filename: `file-${i}.pdf`,
+      source: "gmail" as const,
+      sourceDate: new Date(), // today = max recency
+      similarity: 0.92,
+      score: 0.92,
+    }));
+
+    const result = computeConfidence(chunks);
+    expect(result.level).toBe("high");
+    expect(result.score).toBeGreaterThan(0.75);
+  });
+
+  it("returns low confidence for few old chunks with low similarity", () => {
+    const chunks = [
+      {
+        chunkId: "c1",
+        chunkText: "text",
+        documentId: "d1",
+        filename: "old.pdf",
+        source: "gmail" as const,
+        sourceDate: new Date(Date.now() - 700 * 24 * 60 * 60 * 1000), // 700 days ago
+        similarity: 0.56,
+        score: 0.3,
+      },
+    ];
+
+    const result = computeConfidence(chunks);
+    expect(result.level).toBe("low");
+    expect(result.score).toBeLessThan(0.55);
+  });
+
+  it("returns medium confidence for moderate inputs", () => {
+    const chunks = Array.from({ length: 4 }, (_, i) => ({
+      chunkId: `c${i}`,
+      chunkText: `text ${i}`,
+      documentId: `d${i}`,
+      filename: `file-${i}.pdf`,
+      source: "drive" as const,
+      sourceDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // 90 days ago
+      similarity: 0.72,
+      score: 0.65,
+    }));
+
+    const result = computeConfidence(chunks);
+    expect(result.level).toBe("medium");
+    expect(result.score).toBeGreaterThanOrEqual(0.55);
+    expect(result.score).toBeLessThanOrEqual(0.75);
+  });
+
+  it("coverage ratio caps at 1.0 even with more than DEFAULT_LIMIT chunks", () => {
+    const chunks = Array.from({ length: 12 }, (_, i) => ({
+      chunkId: `c${i}`,
+      chunkText: `text ${i}`,
+      documentId: `d${i}`,
+      filename: `file-${i}.pdf`,
+      source: "gmail" as const,
+      sourceDate: new Date(),
+      similarity: 0.85,
+      score: 0.85,
+    }));
+
+    const result = computeConfidence(chunks);
+    // Should be high — similarity is strong, coverage capped at 1.0, recency is 1.0
+    expect(result.level).toBe("high");
+    expect(result.score).toBeGreaterThan(0.75);
   });
 });

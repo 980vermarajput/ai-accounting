@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 26 February 2026 (18:00 UTC)  
-**Status:** MVP Core Complete — Runtime Tested with Real Gmail Data
+**Last Updated:** 26 February 2026 (20:00 UTC)  
+**Status:** MVP Core Complete + Accuracy & Cost Optimizations — Runtime Tested with Real Gmail Data
 
 ---
 
@@ -18,12 +18,12 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - ✅ **Database:** Postgres 16 + pgvector with RLS, 8 tables, `embedding Unsupported("vector(1536)")` protected
 - ✅ **Migrations:** Applied + seeded with demo firm/users/clients
 - ✅ **Authentication:** Google OAuth + JWT fully wired; AES-256-GCM refresh token encryption in place
-- ✅ **Vitest Test Suite:** 121 tests passing (auth lib, auth middleware, Zod schemas, chunker, extractor, embedder, rag)
+- ✅ **Vitest Test Suite:** 138 tests passing (100 API + 38 shared — auth, middleware, schemas, chunker, extractor, embedder, rag, summarizer, confidence)
 - ✅ **BullMQ Sync Workers:** Gmail + Drive workers runtime-tested; attachment extraction working
 - ✅ **Text Extraction & Chunking:** PDF/DOCX/XLSX/plain-text extraction + Gmail attachment extraction + sentence-aware chunking
 - ✅ **Embedding Pipeline:** OpenAI text-embedding-3-small; vectors stored in pgvector; 7/8 test chunks embedded
-- ✅ **RAG Chat Endpoint:** Two-pass vector search (threshold 0.55 + fallback 0.35), GPT-4o-mini, citations
-- ✅ **Web UI:** Auth flow, Chat, Documents, Sync (ref-based polling), Email Drafts — all runtime-tested
+- ✅ **RAG Chat Endpoint:** Hard similarity cutoff (0.55, no fallback), GPT-4o-mini, citations, confidence scoring, Redis query caching (24hr TTL)
+- ✅ **Web UI:** Auth flow, Chat (confidence badges, WhatsApp copy, compliance templates), Documents, Sync (ref-based polling, clear all), Email Drafts — all runtime-tested
 - ✅ **Email Drafts:** `POST /api/drafts` + `POST /api/drafts/refine` — RAG-grounded AI email drafting
 - ✅ **Runtime Pipeline:** Gmail sync → extraction → chunking → embedding → RAG chat tested end-to-end
 
@@ -77,9 +77,9 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`apps/api/src/lib/chunker.test.ts`** — 11 tests for `chunkText` (empty input, sequential index, token cap, overlap, infinite-loop guard)
 - **`apps/api/src/lib/extractor.test.ts`** — 13 tests for `extractText` (plain text, CRLF, XLSX, DOCX error-handling, textHash determinism)
 - **`apps/api/src/lib/embedder.test.ts`** — 8 tests for `embedChunks` (empty input, batch size 100, 150-chunk split, order preservation, API call shape, error propagation) — OpenAI mocked via `vi.hoisted` + `vi.mock`
-- **`apps/api/src/lib/rag.test.ts`** — 18 tests for `searchChunks` (threshold filtering, recency weighting, score sorting, limit, field mapping, age-0 and age-365 score invariants) and `generateRagAnswer` (JSON parsing, fallback on invalid JSON, token/cost calculation, follow-up capping, context injection)
+- **`apps/api/src/lib/rag.test.ts`** — 23 tests for `searchChunks` (threshold filtering, recency weighting, score sorting, limit, field mapping, age-0 and age-365 score invariants), `generateRagAnswer` (JSON parsing, fallback on invalid JSON, token/cost calculation, follow-up capping, context injection), and `computeConfidence` (empty chunks, high/medium/low levels, coverage cap)
 - **`turbo.json`** — `test` task added with `dependsOn: ["^build"]`
-- **Total: 121 tests, all green** (83 API + 38 shared)
+- **Total: 138 tests, all green** (100 API + 38 shared)
 
 ### Embedding Pipeline
 
@@ -97,10 +97,10 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`apps/web/src/app/layout.tsx`** — root layout wraps all pages in `<UserProvider>`; `lib: ["ES2022","DOM","DOM.Iterable"]` added to `tsconfig.json`
 - **`apps/web/src/app/page.tsx`** — root redirect: `→ /chat` (authenticated) or `→ /sign-in` (unauthenticated)
 - **`apps/web/src/app/sign-in/page.tsx`** — centered sign-in card with Google OAuth button (`href=/api/auth/google`)
-- **`apps/web/src/app/auth/callback/page.tsx`** — reads `?token=` param (via `useSearchParams` + `<Suspense>`), stores JWT, redirects to `/chat`
+- **`apps/web/src/app/auth/callback/page.tsx`** — reads `?token=` param (via `useSearchParams` + `<Suspense>`), stores JWT, calls `refresh()` to populate UserProvider context before redirect (prevents double sign-in race condition), redirects to `/chat`
 - **`apps/web/src/app/auth/error/page.tsx`** — shows human-readable error message keyed by `?reason=` param
 - **`apps/web/src/app/(app)/layout.tsx`** — protected layout; auth-guards all `/chat` + `/documents` routes; shows `<AppNav>` + main content
-- **`apps/web/src/app/(app)/chat/page.tsx`** — full RAG chat interface: history sidebar (30 recent queries), message thread (user/assistant/error bubbles), expandable source citations, suggested follow-up chips, auto-resizing textarea, starter suggestions, thinking indicator
+- **`apps/web/src/app/(app)/chat/page.tsx`** — full RAG chat interface: history sidebar (30 recent queries), message thread (user/assistant/error bubbles), confidence badges (🟢 High / 🟡 Medium / 🔴 Low with score tooltip), ⚡ Cached indicator, 📱 Copy for WhatsApp button (formats answer + sources for mobile sharing), expandable source citations, suggested follow-up chips, compliance template starter chips (Outstanding invoices, Pending TDS, GST filing, Latest communication, etc.), auto-resizing textarea, thinking indicator
 - **`apps/web/src/app/(app)/documents/page.tsx`** — documents dashboard: sync Gmail/Drive buttons with loading state, active-sync banner (5s polling), inline sync result messages, filterable table (source + status), status badges with colors, pagination
 - **`apps/web/src/app/(app)/sync/page.tsx`** — sync control centre: Gmail + Drive action cards, ref-based `setTimeout` polling (stops when all inactive), status badges with animated running indicator, duration column, per-job Cancel button
 - **`apps/web/src/app/(app)/drafts/page.tsx`** — AI email drafting: instruction textarea + client-ID filter + context toggle → `POST /api/drafts`; draft rendered in editable subject+body fields; Refine panel → `POST /api/drafts/refine`; Context Sources accordion; Copy-to-clipboard button with cost/latency metadata
@@ -116,13 +116,13 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ### RAG Chat Endpoint
 
-- **`apps/api/src/lib/rag.ts`** — `searchChunks(query, firmId, options)`: embeds query → pgvector cosine distance ORDER BY with RETRIEVAL_LIMIT=20, threshold filter (0.55) in JS, fallback threshold (0.35) for broad queries, recency weighting (`score = similarity × 1/(1 + ageDays/365)`), returns top-K `SearchResult[]`; `generateRagAnswer(query, chunks)`: GPT-4o-mini with `response_format: json_object`, system prompt adapts to no-context case, returns `{answer, suggestedFollowups, model, tokensPrompt, tokensCompletion, costInr}`
-- **`apps/api/src/routes/chat.ts`** — `POST /` fully wired: `searchChunks` → two-pass fallback search → `generateRagAnswer` → `buildChatSources` (dedup by documentId) → `prisma.query.create` (stores retrievedChunkIds, tokens, latency, costInr) → returns `ChatResponse`; `GET /history` and `POST /:queryId/feedback` implemented
-- **Constants exported:** `SIMILARITY_THRESHOLD = 0.55`, `FALLBACK_SIMILARITY_THRESHOLD = 0.35`, `DEFAULT_LIMIT = 8`, `RETRIEVAL_LIMIT = 20`, `RECENCY_SCALE_DAYS = 365`, `CHAT_MODEL = "gpt-4o-mini"``
+- **`apps/api/src/lib/rag.ts`** — `searchChunks(query, firmId, options)`: embeds query → pgvector cosine distance ORDER BY with RETRIEVAL_LIMIT=20, hard threshold filter (0.55) in JS — no fallback threshold (accuracy > recall for financial data), recency weighting (`score = similarity × 1/(1 + ageDays/365)`), returns top-K `SearchResult[]`; `generateRagAnswer(query, chunks, firmId?)`: GPT-4o-mini with `response_format: json_object`, firm knowledge snapshot injection, system prompt adapts to no-context case, returns `RagAnswer`; `computeConfidence(chunks)`: computes confidence score (0–1) using weighted formula `avgSimilarity×0.6 + coverageRatio×0.3 + avgRecency×0.1`, maps to high/medium/low level
+- **`apps/api/src/routes/chat.ts`** — `POST /` fully wired: Redis query cache check (SHA256 key, 24hr TTL) → `searchChunks` (hard cutoff, no fallback) → `computeConfidence` → `generateRagAnswer` → `buildChatSources` (dedup by documentId) → `prisma.query.create` → cache response → returns `ChatResponse` with `confidence` and `cached` fields; `GET /history` and `POST /:queryId/feedback` implemented
+- **Constants exported:** `SIMILARITY_THRESHOLD = 0.55`, `DEFAULT_LIMIT = 8`, `RECENCY_SCALE_DAYS = 365`, `CHAT_MODEL = "gpt-4o-mini"`
 
 ### Text Extraction & Chunking
 
-- **`apps/api/src/lib/extractor.ts`** — `extractText(buffer, mimeType)` supporting PDF (`PDFParse` class from pdf-parse v2), DOCX/DOC (mammoth), XLSX/XLS/CSV (xlsx → CSV), and `text/*` plain text; normalizes whitespace; returns `{ text, textHash }` (SHA-256 hex)
+- **`apps/api/src/lib/extractor.ts`** — `extractText(buffer, mimeType)` supporting PDF (`PDFParse` class from pdf-parse v2), DOCX/DOC (mammoth), XLSX/XLS/CSV (xlsx → structured semantic sentences with column headers: `"Column: value | Column: value"` per row for dramatically better embedding quality), and `text/*` plain text; normalizes whitespace; returns `{ text, textHash }` (SHA-256 hex)
 - **`apps/api/src/lib/chunker.ts`** — `chunkText(text)` sentence-aware chunker; 900-token target, 1200-token cap, 200-token overlap between chunks; `~4 chars/token` approximation; returns `ChunkInput[]` with `chunkText`, `tokenCount`, `chunkIndex`
 - **`apps/api/src/queues/extraction.queue.ts`** — `extractionQueue` (BullMQ Queue) + `addExtractionJob()`; job ID uses dashes `extract-<documentId>` (**no colons** — BullMQ Redis key conflict); 3 retries with exponential backoff
 - **`apps/api/src/workers/extraction.worker.ts`** — full extraction processor: decrypts refresh token (`Buffer.from().toString("utf8")`) → downloads content (Gmail: `messages.get` full + attachment downloads via `collectAttachmentParts()`; Drive: `files.get` media / `files.export`) → `extractText()` → dedup by `textHash` → `chunkText()` → `chunk.createMany()` → sets document `status: "ready"`
@@ -146,7 +146,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
   - `exchangeCodeForTokens()` — exchanges authorization code for Google access + refresh tokens
   - `fetchGoogleProfile()` — fetches email, name, picture from Google userinfo API
   - `encrypt()` / `decrypt()` — AES-256-GCM with random 12-byte IV per token, stored as base64
-  - `signJwt()` / `verifyJwt()` — JWT session tokens (15m expiry, issuer + audience validated)
+  - `signJwt()` / `verifyJwt()` — JWT session tokens (7d expiry, issuer + audience validated)
 - **`src/routes/auth.ts`** — full OAuth flow:
   - `GET /google` → redirects to Google consent screen
   - `GET /google/callback` → exchanges code, upserts User+Firm in DB, issues JWT, redirects to frontend

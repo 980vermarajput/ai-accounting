@@ -222,18 +222,20 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ## 7 — Vectorization & Chunking Strategy
 
-| Parameter                        | Value                                                             | Rationale                                                 |
-| -------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
-| **Embedding model**              | `text-embedding-3-small` (1536 dims)                              | Cost-effective, good quality                              |
-| **Chunk size**                   | 800–1200 tokens                                                   | Balance between context and precision                     |
-| **Chunk overlap**                | 200 tokens                                                        | Preserve context across boundaries                        |
-| **Preprocessing**                | Strip boilerplate signatures, email headers, duplicate whitespace | Reduce noise                                              |
-| **Deduplication**                | SHA-256 hash of normalized text                                   | Skip re-embedding identical content                       |
-| **Top-K retrieval**              | K = 8 (display), 20 (retrieval limit)                             | Retrieve 20, rank & return top 8                          |
-| **Ranking formula**              | `score = cosine_similarity × recency_weight`                      |                                                           |
-| **Recency weight**               | `1 / (1 + age_days / 365)`                                        | Bias toward recent documents                              |
-| **Minimum similarity threshold** | 0.55 (primary), 0.35 (fallback)                                   | Two-pass search: retry with lower threshold if no results |
-| **Max context tokens**           | 6,000 tokens                                                      | Cost control, fits in context window                      |
+| Parameter                        | Value                                                             | Rationale                                                               |
+| -------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Embedding model**              | `text-embedding-3-small` (1536 dims)                              | Cost-effective, good quality                                            |
+| **Chunk size**                   | 800–1200 tokens                                                   | Balance between context and precision                                   |
+| **Chunk overlap**                | 200 tokens                                                        | Preserve context across boundaries                                      |
+| **Preprocessing**                | Strip boilerplate signatures, email headers, duplicate whitespace | Reduce noise                                                            |
+| **Deduplication**                | SHA-256 hash of normalized text                                   | Skip re-embedding identical content                                     |
+| **Top-K retrieval**              | K = 8 (display), 20 (retrieval limit)                             | Retrieve 20, rank & return top 8                                        |
+| **Ranking formula**              | `score = cosine_similarity × recency_weight`                      |                                                                         |
+| **Recency weight**               | `1 / (1 + age_days / 365)`                                        | Bias toward recent documents                                            |
+| **Minimum similarity threshold** | 0.55 (hard cutoff, no fallback)                                   | Accuracy > recall for financial data; low-confidence results suppressed |
+| **Max context tokens**           | 6,000 tokens                                                      | Cost control, fits in context window                                    |
+| **Query caching**                | Redis, SHA256 key, 24hr TTL                                       | Avoid redundant LLM calls for repeated questions                        |
+| **Confidence scoring**           | Weighted: similarity×0.6 + coverage×0.3 + recency×0.1             | High/Medium/Low badge shown to user                                     |
 
 ### Chunking Pipeline
 
@@ -243,6 +245,8 @@ Document → Text Extraction → Normalization → Dedup Check
     → Batch Embedding (max 100 chunks/request)
     → Store in pgvector
 ```
+
+**XLSX/XLS extraction note:** Spreadsheets are converted to structured semantic sentences (`"Column: value | Column: value"` per row) rather than raw CSV, yielding dramatically better embedding quality for tabular financial data.
 
 ---
 
@@ -274,6 +278,7 @@ Document → Text Extraction → Normalization → Dedup Check
 | GET    | `/api/documents`        | List documents with filters (client, source, date) | ✅ Live       |
 | GET    | `/api/documents/:id`    | Document detail + chunk count                      | ✅ Live       |
 | DELETE | `/api/documents/:id`    | Delete document + chunks + embeddings              | ✅ Live       |
+| DELETE | `/api/documents`        | Bulk delete all documents for a firm               | ✅ Live       |
 
 ### Chat / RAG
 
@@ -312,6 +317,10 @@ Document → Text Extraction → Normalization → Dedup Check
       "relevance_score": 0.94
     }
   ],
+  "confidence": {
+    "level": "high",
+    "score": 0.82
+  },
   "suggested_followups": [
     "Show me all invoices for ABC Pvt Ltd from the last 6 months",
     "Draft a payment reminder email to ABC Pvt Ltd"
@@ -324,7 +333,8 @@ Document → Text Extraction → Normalization → Dedup Check
     "latency_ms": 3200,
     "retrieval_latency_ms": 180,
     "chunks_retrieved": 8,
-    "chunks_used": 3
+    "chunks_used": 3,
+    "cached": false
   }
 }
 ```

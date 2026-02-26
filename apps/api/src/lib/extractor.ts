@@ -66,13 +66,37 @@ export async function extractText(
     mimeType === "text/csv"
   ) {
     // ── XLSX / XLS / CSV ─────────────────────────────────────────
-    // Each sheet is serialised as CSV; sheets are joined with double newline
+    // Convert each row into a structured semantic sentence by prefixing
+    // column headers. This dramatically improves embedding quality
+    // for financial data (invoices, ledgers, etc.).
     const workbook = XLSX.read(buffer, { type: "buffer" });
     const sheets: string[] = [];
     for (const name of workbook.SheetNames) {
-      const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[name]);
-      if (csv.trim()) {
-        sheets.push(`[${name}]\n${csv}`);
+      const sheet = workbook.Sheets[name];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: "",
+      });
+
+      if (rows.length === 0) {
+        // Fallback to raw CSV for sheets without headers
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        if (csv.trim()) sheets.push(`[${name}]\n${csv}`);
+        continue;
+      }
+
+      // Build semantic sentences from each row: "Column1: value1 | Column2: value2 | ..."
+      const headers = Object.keys(rows[0]);
+      const semanticRows = rows
+        .map((row) =>
+          headers
+            .filter((h) => row[h] !== "" && row[h] != null)
+            .map((h) => `${h}: ${String(row[h])}`)
+            .join(" | "),
+        )
+        .filter((line) => line.trim());
+
+      if (semanticRows.length > 0) {
+        sheets.push(`[${name}]\n${semanticRows.join("\n")}`);
       }
     }
     raw = sheets.join("\n\n");
