@@ -241,38 +241,19 @@
 
 ## 5 — Data Flow Diagrams
 
-### 5.1 Authentication Flow
+### 5.1 Authentication Flow (Updated)
 
-```
-User                  Next.js Frontend        API Server         Google OAuth         Database
- │                         │                     │                    │                  │
- │  Click "Sign in"        │                     │                    │                  │
- │────────────────────────▶│                     │                    │                  │
- │                         │  GET /api/auth/google                   │                  │
- │                         │────────────────────▶│                    │                  │
- │                         │                     │  Generate OAuth URL│                  │
- │                         │                     │───────────────────▶│                  │
- │  ◀──────── Redirect to Google Consent ────────┤                    │                  │
- │                         │                     │                    │                  │
- │  Approve scopes         │                     │                    │                  │
- │───────────────────────────────────────────────────────────────────▶│                  │
- │                         │                     │                    │                  │
- │  ◀──── Redirect to /callback?code=xxx ────────┤                    │                  │
- │                         │                     │                    │                  │
- │                         │  POST /callback     │                    │                  │
- │                         │────────────────────▶│                    │                  │
- │                         │                     │  Exchange code     │                  │
- │                         │                     │───────────────────▶│                  │
- │                         │                     │  ◀─ tokens ────────│                  │
- │                         │                     │                    │                  │
- │                         │                     │  Encrypt refresh token               │
- │                         │                     │  Create/Update user                  │
- │                         │                     │─────────────────────────────────────▶│
- │                         │                     │                    │                  │
- │                         │                     │  Issue JWT session │                  │
- │                         │  ◀─ Set cookie ─────│                    │                  │
- │  ◀── Redirect to dashboard                   │                    │                  │
-```
+- **JWT is stored in a HttpOnly cookie** named `__session` after Google OAuth login.
+- The backend issues the JWT and sets it as a cookie (secure, sameSite strict/lax, 7-day expiry).
+- On every API request, the backend checks for the JWT in the cookie first (preferred), then falls back to the `Authorization: Bearer` header (for API clients/dev tools).
+- Logout clears the cookie and blacklists the JWT in Redis.
+- In development, you can bypass auth using the `X-Dev-User` header.
+
+**Summary:**
+
+- Production: JWT is stored in a HttpOnly cookie (`__session`), checked first for all auth.
+- API clients/dev tools: Can use `Authorization: Bearer <token>` header as fallback.
+- Dev mode: `X-Dev-User` header bypass.
 
 ### 5.2 Data Ingestion Flow (Gmail Sync)
 
