@@ -55,7 +55,11 @@ chatRouter.post(
       const retrievalLatencyMs = Date.now() - retrievalStart;
 
       // 2. LLM generation grounded in retrieved chunks
-      const ragAnswer = await generateRagAnswer(body.query, searchResults);
+      const ragAnswer = await generateRagAnswer(
+        body.query,
+        searchResults,
+        firmId,
+      );
 
       const latencyMs = Date.now() - totalStart;
 

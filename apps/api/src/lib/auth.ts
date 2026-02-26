@@ -194,7 +194,7 @@ function getJwtSecret(): string {
 export function signJwt(payload: JwtPayload): string {
   return jwt.sign(payload, getJwtSecret(), {
     expiresIn:
-      (process.env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"]) ?? "15m",
+      (process.env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"]) ?? "7d",
     issuer: "ai-accounting",
     audience: "ai-accounting-client",
   });

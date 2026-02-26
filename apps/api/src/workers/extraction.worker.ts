@@ -22,6 +22,10 @@ import { decrypt } from "../lib/auth";
 import { extractText } from "../lib/extractor";
 import { chunkText } from "../lib/chunker";
 import { addEmbeddingJob } from "../queues/embedding.queue";
+import {
+  generateDocumentSummary,
+  rebuildFirmSnapshot,
+} from "../lib/summarizer";
 import type { ExtractionJobData } from "../queues/extraction.queue";
 
 // ─── Gmail helpers ────────────────────────────────────────────────
@@ -306,7 +310,50 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
       },
     });
 
-    // 9. Kick off embedding pipeline
+    // 9. Generate LLM summary + entities (non-blocking — failures don't affect status)
+    try {
+      // Fetch the filename for context (ExtractionJobData doesn't carry it)
+      const docRecord = await prisma.document.findUnique({
+        where: { id: documentId },
+        select: { filename: true },
+      });
+      const filename = docRecord?.filename ?? "unknown";
+
+      const summaryResult = await generateDocumentSummary(
+        text,
+        filename,
+        effectiveMimeType,
+      );
+      if (summaryResult) {
+        await prisma.document.update({
+          where: { id: documentId },
+          data: {
+            summary: summaryResult.summary,
+            entities:
+              summaryResult.entities as unknown as import("@prisma/client").Prisma.InputJsonValue,
+          },
+        });
+        console.log(
+          `[Extraction] Job ${job.id}: summary generated for ${documentId}`,
+        );
+
+        // Rebuild firm knowledge snapshot with the new summary
+        await rebuildFirmSnapshot(firmId).catch((err) => {
+          console.warn(
+            `[Extraction] Job ${job.id}: snapshot rebuild failed:`,
+            err instanceof Error ? err.message : err,
+          );
+        });
+      }
+    } catch (summaryErr) {
+      // Non-fatal — document is still ready, just without a summary
+      console.warn(
+        `[Extraction] Job ${job.id}: summary generation failed:`,
+        summaryErr instanceof Error ? summaryErr.message : summaryErr,
+      );
+    }
+
+    // 10. Kick off embedding pipeline
     if (chunks.length > 0) {
       await addEmbeddingJob({ documentId, firmId });
     }

@@ -44,6 +44,8 @@ export default function SyncPage() {
   const [startingGmail, setStartingGmail] = useState(false);
   const [startingDrive, setStartingDrive] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [clearingDocs, setClearingDocs] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [flash, setFlash] = useState<FlashState>(null);
 
   const showFlash = (type: "success" | "error", message: string) => {
@@ -154,6 +156,28 @@ export default function SyncPage() {
     }
   };
 
+  // ─── Clear all documents ──────────────────────────────────────
+
+  const clearAllDocs = async () => {
+    setShowClearConfirm(false);
+    setClearingDocs(true);
+    try {
+      const res = await apiFetch<ApiResponse>("/api/documents", {
+        method: "DELETE",
+      });
+      if (res.success) {
+        showFlash("success", "All documents cleared. You can now re-sync.");
+      }
+    } catch (err) {
+      showFlash(
+        "error",
+        `Failed to clear: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+    } finally {
+      setClearingDocs(false);
+    }
+  };
+
   const hasActive = jobs.some(
     (j) => j.status === "queued" || j.status === "running",
   );
@@ -233,6 +257,59 @@ export default function SyncPage() {
           </button>
         </div>
       </div>
+
+      {/* Danger zone */}
+      <div className="mb-8 border border-red-200 rounded-xl bg-red-50 p-5">
+        <h2 className="font-semibold text-red-800 mb-1">Danger Zone</h2>
+        <p className="text-sm text-red-600 mb-4">
+          Permanently deletes all synced documents, chunks, and embeddings for
+          your firm. The knowledge snapshot will also be cleared. Use this
+          before a full re-sync.
+        </p>
+        <button
+          onClick={() => setShowClearConfirm(true)}
+          disabled={clearingDocs || hasActive}
+          className="py-2 px-4 rounded-lg bg-white border border-red-300 text-red-700 text-sm font-medium hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {clearingDocs ? "Clearing…" : "🗑️ Clear All Documents"}
+        </button>
+        {hasActive && (
+          <p className="mt-2 text-xs text-red-500">
+            Cannot clear while a sync is in progress.
+          </p>
+        )}
+      </div>
+
+      {/* Confirmation modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              Clear all documents?
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              This will permanently delete{" "}
+              <strong>all documents, chunks, and embeddings</strong> for your
+              firm. This cannot be undone. You will need to re-sync to rebuild
+              your knowledge base.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-2 px-4 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void clearAllDocs()}
+                className="flex-1 py-2 px-4 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+              >
+                Yes, delete everything
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent jobs table */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">

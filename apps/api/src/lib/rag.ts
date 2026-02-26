@@ -221,17 +221,33 @@ export async function searchChunks(
 /**
  * Generate an LLM answer grounded in the retrieved chunks.
  *
- * @param query  - The user's original question.
- * @param chunks - Context chunks from `searchChunks` (may be empty).
- * @returns      - Answer text, suggested follow-up questions, and token usage.
+ * @param query     - The user's original question.
+ * @param chunks    - Context chunks from `searchChunks` (may be empty).
+ * @param firmId    - UUID of the firm — used to load the knowledge snapshot.
+ * @returns         - Answer text, suggested follow-up questions, and token usage.
  */
 export async function generateRagAnswer(
   query: string,
   chunks: SearchResult[],
+  firmId?: string,
 ): Promise<RagAnswer> {
   const client = getCompletionClient();
 
-  const systemPrompt = buildSystemPrompt(chunks.length > 0);
+  // Load firm knowledge snapshot if available
+  let firmSnapshot: string | null = null;
+  if (firmId) {
+    try {
+      const firm = await prisma.firm.findUnique({
+        where: { id: firmId },
+        select: { knowledgeSnapshot: true },
+      });
+      firmSnapshot = firm?.knowledgeSnapshot ?? null;
+    } catch {
+      // Non-fatal — proceed without snapshot
+    }
+  }
+
+  const systemPrompt = buildSystemPrompt(chunks.length > 0, firmSnapshot);
   const userMessage = buildUserMessage(query, chunks);
 
   const completion = await client.chat.completions.create({
@@ -286,7 +302,10 @@ export async function generateRagAnswer(
 
 // ─── Prompt builders ─────────────────────────────────────────────
 
-function buildSystemPrompt(hasContext: boolean): string {
+function buildSystemPrompt(
+  hasContext: boolean,
+  firmSnapshot?: string | null,
+): string {
   const base = `You are an expert AI assistant for Indian chartered accountants (CAs). \
 You help accounting firms with questions about their clients' financial documents.
 
@@ -301,9 +320,15 @@ General guidelines:
 - Reference specific documents using [filename] notation where relevant.
 - Keep follow-up questions concise and directly actionable.`;
 
+  // Inject firm knowledge snapshot so the LLM knows what documents exist
+  const snapshotBlock = firmSnapshot
+    ? `\n\n--- FIRM KNOWLEDGE SNAPSHOT ---\nThe following is an overview of all documents indexed for this firm. Use it to understand what information is available, answer broad questions, and suggest relevant follow-ups.\n\n${firmSnapshot}\n--- END SNAPSHOT ---`
+    : "";
+
   if (hasContext) {
     return (
       base +
+      snapshotBlock +
       `
 
 Context guidelines:
@@ -315,10 +340,12 @@ Context guidelines:
 
   return (
     base +
+    snapshotBlock +
     `
 
 No documents found: No relevant documents were found for this query.
 - Inform the user that no matching documents were found in the system.
+- If the knowledge snapshot above lists documents that might be relevant, suggest the user refine their query.
 - Suggest what types of documents (e.g., invoices, ledgers, bank statements, correspondence) might contain the answer.
 - You may provide general guidance from Indian CA practice if appropriate.`
   );

@@ -3,14 +3,18 @@
 import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { setToken } from "../../../lib/api";
+import { useUser } from "../../../contexts/user-context";
 
 /**
- * Reads `?token=` from the URL, stores in localStorage, then redirects.
- * Wrapped in <Suspense> as required by Next.js when using useSearchParams.
+ * Reads `?token=` from the URL, stores in localStorage, then refreshes the
+ * UserProvider context before redirecting. Without the refresh() call, the
+ * context already finished loading with user=null (token wasn't set yet), and
+ * AppLayout would immediately bounce back to /sign-in.
  */
 function CallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refresh } = useUser();
   const handled = useRef(false);
 
   useEffect(() => {
@@ -20,11 +24,15 @@ function CallbackHandler() {
     const token = searchParams.get("token");
     if (token) {
       setToken(token);
-      router.replace("/chat");
+      // Re-fetch /api/auth/me with the new token so the context has a valid
+      // user before we navigate — prevents the "sign in twice" race condition.
+      refresh().then(() => {
+        router.replace("/chat");
+      });
     } else {
       router.replace("/auth/error?reason=no_token");
     }
-  }, [router, searchParams]);
+  }, [router, searchParams, refresh]);
 
   return null;
 }

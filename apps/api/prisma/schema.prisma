@@ -63,10 +63,11 @@ model Firm {
   id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name              String   @db.VarChar(255)
   slug              String   @unique @db.VarChar(100)
-  plan              Plan     @default(trial)
-  stripeCustomerId  String?  @map("stripe_customer_id") @db.VarChar(255)
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  plan               Plan     @default(trial)
+  stripeCustomerId   String?  @map("stripe_customer_id") @db.VarChar(255)
+  knowledgeSnapshot  String?  @map("knowledge_snapshot")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   users     User[]
   clients   Client[]
@@ -142,6 +143,8 @@ model Document {
   textExcerpt  String?        @map("text_excerpt")
   status       DocumentStatus @default(pending)
   errorMessage String?        @map("error_message")
+  summary      String?
+  entities     Json?          @db.JsonB
   sourceDate   DateTime       @map("source_date") @db.Timestamptz()
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz()
 

@@ -8,6 +8,7 @@ export interface Firm {
   slug: string;
   plan: Plan;
   stripeCustomerId?: string;
+  knowledgeSnapshot?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,8 +60,19 @@ export interface Document {
   textExcerpt: string;
   status: DocumentStatus;
   errorMessage?: string;
+  summary?: string;
+  entities?: DocumentEntities;
   sourceDate: Date;
   createdAt: Date;
+}
+
+export interface DocumentEntities {
+  clients: string[];
+  amounts: string[];
+  dates: string[];
+  documentType?: string;
+  gstNumbers?: string[];
+  panNumbers?: string[];
 }
 
 // ─── Chat ────────────────────────────────────────────

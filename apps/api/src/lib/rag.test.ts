@@ -47,6 +47,9 @@ vi.mock("./embedder", () => ({
 vi.mock("./prisma", () => ({
   prisma: {
     $queryRaw: vi.fn(),
+    firm: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 

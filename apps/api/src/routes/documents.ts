@@ -110,6 +110,36 @@ documentsRouter.post(
   },
 );
 
+// ─── DELETE /api/documents — clear ALL documents for this firm ───
+documentsRouter.delete(
+  "/",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { firmId } = req.user!;
+
+      // Delete all documents for the firm (chunks cascade via DB relation)
+      const { count } = await prisma.document.deleteMany({ where: { firmId } });
+
+      // Clear the firm knowledge snapshot since all docs are gone
+      await prisma.firm.update({
+        where: { id: firmId },
+        data: { knowledgeSnapshot: null },
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          message: `Deleted ${count} document(s) and cleared knowledge snapshot`,
+          count,
+        },
+      };
+      res.json(response);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ─── DELETE /api/documents/:id — delete document + chunks ────────
 documentsRouter.delete(
   "/:id",
