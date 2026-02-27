@@ -41,6 +41,17 @@ export type FeedbackInput = z.infer<typeof feedbackSchema>;
 
 // ─── Sync Schemas ────────────────────────────────────
 
+export const syncRequestSchema = z.object({
+  keywords: z
+    .array(z.string())
+    .max(20, "Maximum 20 keywords allowed")
+    .optional()
+    .transform(val => val?.map(k => k.trim()).filter(k => k.length > 0) || [])
+    .pipe(z.array(z.string().min(1).max(100))),
+  includeAllKeywords: z.boolean().default(true),
+});
+export type SyncRequestInput = z.infer<typeof syncRequestSchema>;
+
 export const syncCancelSchema = z.object({
   jobId: z.string().uuid(),
 });

@@ -13,7 +13,11 @@ import type { SyncJobData } from "../queues/sync.queue";
 async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
   const { userId, firmId, syncJobId } = job.data;
 
-  // 1. Mark the DB sync job as running
+  // 1. Load sync job data and mark as running
+  const syncJob = await prisma.syncJob.findUniqueOrThrow({
+    where: { id: syncJobId },
+  });
+
   await prisma.syncJob.update({
     where: { id: syncJobId },
     data: { status: "running", startedAt: new Date() },
@@ -66,7 +70,17 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
       query += ` -from:${pattern.trim()}`;
     }
 
-    console.log(`[Gmail Sync] Query: ${query}, maxResults: ${maxResults}`);
+    // Add keyword filtering if provided
+    const syncJobTyped = syncJob as any; // TODO: Remove once IDE refreshes Prisma types
+    if (syncJobTyped.keywords && syncJobTyped.keywords.length > 0) {
+      const keywordOperator = syncJobTyped.includeAllKeywords ? ' AND ' : ' OR ';
+      const keywordQuery = syncJobTyped.keywords
+        .map((keyword: string) => `"${keyword.trim()}"`)
+        .join(keywordOperator);
+      query += ` (${keywordQuery})`;
+    }
+
+    console.log(`[Gmail Sync] Query: ${query}, maxResults: ${maxResults}, keywords: [${syncJobTyped.keywords?.join(', ') || 'none'}]`);
 
     const listRes = await gmail.users.messages.list({
       userId: "me",

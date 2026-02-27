@@ -27,7 +27,11 @@ const INDEXABLE_MIME_TYPES = new Set([
 async function processDriveSync(job: Job<SyncJobData>): Promise<void> {
   const { userId, firmId, syncJobId } = job.data;
 
-  // 1. Mark the DB sync job as running
+  // 1. Load sync job data and mark as running
+  const syncJob = await prisma.syncJob.findUniqueOrThrow({
+    where: { id: syncJobId },
+  });
+
   await prisma.syncJob.update({
     where: { id: syncJobId },
     data: { status: "running", startedAt: new Date() },
@@ -68,9 +72,24 @@ async function processDriveSync(job: Job<SyncJobData>): Promise<void> {
 
     const maxResults = parseInt(process.env.SYNC_MAX_RESULTS ?? "25", 10);
 
+    // Build Drive query with keyword filtering
+    let query = `(${mimeQuery}) and trashed=false`;
+
+    // Add keyword filtering if provided
+    const syncJobTyped = syncJob as any; // TODO: Remove once IDE refreshes Prisma types
+    if (syncJobTyped.keywords && syncJobTyped.keywords.length > 0) {
+      const keywordOperator = syncJobTyped.includeAllKeywords ? ' and ' : ' or ';
+      const keywordQuery = syncJobTyped.keywords
+        .map((keyword: string) => `fullText contains "${keyword.trim()}"`)
+        .join(keywordOperator);
+      query += ` and (${keywordQuery})`;
+    }
+
+    console.log(`[Drive Sync] Query: ${query}, maxResults: ${maxResults}, keywords: [${syncJobTyped.keywords?.join(', ') || 'none'}]`);
+
     const listRes = await drive.files.list({
       pageSize: maxResults,
-      q: `(${mimeQuery}) and trashed=false`,
+      q: query,
       fields: "files(id,name,mimeType,modifiedTime,size,parents),nextPageToken",
       orderBy: "modifiedTime desc",
     });

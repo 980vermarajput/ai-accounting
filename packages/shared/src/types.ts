@@ -138,6 +138,8 @@ export interface SyncJob {
   status: SyncStatus;
   documentsFound: number;
   documentsProcessed: number;
+  keywords: string[];
+  includeAllKeywords: boolean;
   errorMessage?: string;
   startedAt?: Date;
   completedAt?: Date;

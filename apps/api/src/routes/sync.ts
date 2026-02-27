@@ -2,9 +2,10 @@ import type { Request, Response, NextFunction } from "express";
 import { Router } from "express";
 import type {
   ApiResponse,
-  PaginatedResponse,
   SyncJob,
+  SyncRequestInput,
 } from "@ai-accounting/shared";
+import { syncRequestSchema } from "@ai-accounting/shared";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { ApiError } from "../lib/api-error";
@@ -15,19 +16,43 @@ export const syncRouter: Router = Router();
 // All sync routes require authentication
 syncRouter.use(requireAuth);
 
+// Validation middleware for sync requests
+const validateSyncRequest = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = syncRequestSchema.parse(req.body);
+    req.body = parsed; // Replace with validated data
+    next();
+  } catch (err: any) {
+    const response: ApiResponse = {
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: err.errors?.[0]?.message || "Invalid request data",
+      },
+    };
+    res.status(400).json(response);
+  }
+};
+
 // ─── POST /api/sync/gmail — enqueue Gmail sync job ───────────────
 syncRouter.post(
   "/gmail",
+  validateSyncRequest,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { keywords = [], includeAllKeywords = true } = req.body as SyncRequestInput;
+
       // 1. Create a DB record so the client can poll /status
+      const createData = {
+        firmId: req.user!.firmId,
+        userId: req.user!.userId,
+        type: "gmail" as const,
+        status: "queued" as const,
+        keywords,
+        includeAllKeywords,
+      };
       const syncJob = await prisma.syncJob.create({
-        data: {
-          firmId: req.user!.firmId,
-          userId: req.user!.userId,
-          type: "gmail",
-          status: "queued",
-        },
+        data: createData as any, // TODO: Remove once IDE refreshes Prisma types
       });
 
       // 2. Enqueue the BullMQ job — worker picks it up asynchronously
@@ -60,16 +85,22 @@ syncRouter.post(
 // ─── POST /api/sync/drive — enqueue Drive sync job ───────────────
 syncRouter.post(
   "/drive",
+  validateSyncRequest,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { keywords = [], includeAllKeywords = true } = req.body as SyncRequestInput;
+
       // 1. Create a DB record
+      const createData = {
+        firmId: req.user!.firmId,
+        userId: req.user!.userId,
+        type: "drive" as const,
+        status: "queued" as const,
+        keywords,
+        includeAllKeywords,
+      };
       const syncJob = await prisma.syncJob.create({
-        data: {
-          firmId: req.user!.firmId,
-          userId: req.user!.userId,
-          type: "drive",
-          status: "queued",
-        },
+        data: createData as any, // TODO: Remove once IDE refreshes Prisma types
       });
 
       // 2. Enqueue the BullMQ job

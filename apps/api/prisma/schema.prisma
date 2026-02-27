@@ -246,6 +246,8 @@ model SyncJob {
   status             SyncStatus @default(queued)
   documentsFound     Int        @default(0) @map("documents_found")
   documentsProcessed Int        @default(0) @map("documents_processed")
+  keywords           String[]   @default([])
+  includeAllKeywords Boolean    @default(true) @map("include_all_keywords")
   errorMessage       String?    @map("error_message")
   startedAt          DateTime?  @map("started_at") @db.Timestamptz()
   completedAt        DateTime?  @map("completed_at") @db.Timestamptz()

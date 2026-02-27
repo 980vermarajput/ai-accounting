@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { ApiResponse, SyncJob } from "@ai-accounting/shared";
+import type { ApiResponse, SyncJob, SyncRequestInput } from "@ai-accounting/shared";
 import { apiFetch } from "@/lib/api";
 
 type SyncStatus = SyncJob["status"];
@@ -47,6 +47,14 @@ export default function SyncPage() {
   const [clearingDocs, setClearingDocs] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [flash, setFlash] = useState<FlashState>(null);
+
+  // Keyword filtering state
+  const [showGmailAdvanced, setShowGmailAdvanced] = useState(false);
+  const [showDriveAdvanced, setShowDriveAdvanced] = useState(false);
+  const [gmailKeywords, setGmailKeywords] = useState<string>("");
+  const [driveKeywords, setDriveKeywords] = useState<string>("");
+  const [gmailIncludeAll, setGmailIncludeAll] = useState(true);
+  const [driveIncludeAll, setDriveIncludeAll] = useState(true);
 
   const showFlash = (type: "success" | "error", message: string) => {
     setFlash({ type, message });
@@ -111,14 +119,32 @@ export default function SyncPage() {
   const startSync = async (type: "gmail" | "drive") => {
     if (type === "gmail") setStartingGmail(true);
     else setStartingDrive(true);
+
     try {
+      // Prepare sync request with keywords
+      const keywords = type === "gmail" ? gmailKeywords : driveKeywords;
+      const includeAllKeywords = type === "gmail" ? gmailIncludeAll : driveIncludeAll;
+
+      const requestBody: SyncRequestInput = {
+        keywords: keywords
+          .split(",")
+          .map(k => k.trim())
+          .filter(k => k.length > 0),
+        includeAllKeywords,
+      };
+
       const res = await apiFetch<ApiResponse>(`/api/sync/${type}`, {
         method: "POST",
+        body: JSON.stringify(requestBody),
       });
+
       if (res.success) {
+        const keywordInfo = requestBody.keywords.length > 0
+          ? ` with keywords: ${requestBody.keywords.join(", ")}`
+          : "";
         showFlash(
           "success",
-          `${type === "gmail" ? "Gmail" : "Drive"} sync started!`,
+          `${type === "gmail" ? "Gmail" : "Drive"} sync started${keywordInfo}!`,
         );
         // Restart the polling loop — new job is queued so we need to watch it
         startPolling();
@@ -226,6 +252,48 @@ export default function SyncPage() {
               </p>
             </div>
           </div>
+
+          {/* Advanced options toggle */}
+          <button
+            onClick={() => setShowGmailAdvanced(!showGmailAdvanced)}
+            className="w-full mb-3 py-1 px-2 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            {showGmailAdvanced ? "▼ Hide Advanced Options" : "▶ Advanced Options"}
+          </button>
+
+          {/* Advanced options content */}
+          {showGmailAdvanced && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Keywords (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., invoice, payment, tax, receipt"
+                  value={gmailKeywords}
+                  onChange={(e) => setGmailKeywords(e.target.value)}
+                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-red-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Only sync emails containing these keywords. Leave empty to sync all.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="gmail-include-all"
+                  checked={gmailIncludeAll}
+                  onChange={(e) => setGmailIncludeAll(e.target.checked)}
+                  className="w-3 h-3 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500"
+                />
+                <label htmlFor="gmail-include-all" className="text-xs text-gray-700">
+                  Require ALL keywords (vs ANY keyword)
+                </label>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => void startSync("gmail")}
             disabled={startingGmail}
@@ -248,6 +316,48 @@ export default function SyncPage() {
               </p>
             </div>
           </div>
+
+          {/* Advanced options toggle */}
+          <button
+            onClick={() => setShowDriveAdvanced(!showDriveAdvanced)}
+            className="w-full mb-3 py-1 px-2 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            {showDriveAdvanced ? "▼ Hide Advanced Options" : "▶ Advanced Options"}
+          </button>
+
+          {/* Advanced options content */}
+          {showDriveAdvanced && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Keywords (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., budget, financial, report, statement"
+                  value={driveKeywords}
+                  onChange={(e) => setDriveKeywords(e.target.value)}
+                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Only sync files containing these keywords. Leave empty to sync all.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="drive-include-all"
+                  checked={driveIncludeAll}
+                  onChange={(e) => setDriveIncludeAll(e.target.checked)}
+                  className="w-3 h-3 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="drive-include-all" className="text-xs text-gray-700">
+                  Require ALL keywords (vs ANY keyword)
+                </label>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => void startSync("drive")}
             disabled={startingDrive}
@@ -340,6 +450,7 @@ export default function SyncPage() {
                 <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
                   <th className="px-5 py-3 font-medium">Type</th>
                   <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium">Keywords</th>
                   <th className="px-5 py-3 font-medium">Found</th>
                   <th className="px-5 py-3 font-medium">Processed</th>
                   <th className="px-5 py-3 font-medium">Started</th>
@@ -365,6 +476,16 @@ export default function SyncPage() {
                         )}
                         {job.status}
                       </span>
+                    </td>
+                    <td className="px-5 py-3 text-gray-600">
+                      {job.keywords && job.keywords.length > 0 ? (
+                        <span className="text-xs text-gray-500 font-mono">
+                          {job.keywords.join(", ")}
+                          {job.includeAllKeywords ? " (ALL)" : " (ANY)"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">All documents</span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-gray-600">
                       {job.documentsFound ?? 0}

@@ -7,6 +7,7 @@ import {
   inviteUserSchema,
   feedbackSchema,
   sendDraftSchema,
+  syncRequestSchema,
 } from "./schemas";
 
 // ─── googleCallbackSchema ─────────────────────────────────────────────────────
@@ -316,5 +317,83 @@ describe("sendDraftSchema", () => {
         body: "Hello",
       }),
     ).toThrow();
+  });
+});
+
+// ─── syncRequestSchema ─────────────────────────────────────────────────────
+
+describe("syncRequestSchema", () => {
+  it("accepts empty keywords array", () => {
+    const result = syncRequestSchema.parse({
+      keywords: [],
+      includeAllKeywords: true,
+    });
+    expect(result.keywords).toEqual([]);
+    expect(result.includeAllKeywords).toBe(true);
+  });
+
+  it("accepts valid keywords array", () => {
+    const result = syncRequestSchema.parse({
+      keywords: ["invoice", "payment", "tax"],
+      includeAllKeywords: false,
+    });
+    expect(result.keywords).toEqual(["invoice", "payment", "tax"]);
+    expect(result.includeAllKeywords).toBe(false);
+  });
+
+  it("trims whitespace from keywords", () => {
+    const result = syncRequestSchema.parse({
+      keywords: ["  invoice  ", " payment", "tax "],
+      includeAllKeywords: true,
+    });
+    expect(result.keywords).toEqual(["invoice", "payment", "tax"]);
+  });
+
+  it("filters out empty strings after trimming", () => {
+    const result = syncRequestSchema.parse({
+      keywords: ["invoice", "", "payment", "   ", "tax"],
+      includeAllKeywords: true,
+    });
+    expect(result.keywords).toEqual(["invoice", "payment", "tax"]);
+  });
+
+  it("defaults includeAllKeywords to true when not provided", () => {
+    const result = syncRequestSchema.parse({
+      keywords: ["invoice"],
+    });
+    expect(result.includeAllKeywords).toBe(true);
+  });
+
+  it("accepts optional empty object (no keywords)", () => {
+    const result = syncRequestSchema.parse({});
+    expect(result.keywords).toEqual([]);
+    expect(result.includeAllKeywords).toBe(true);
+  });
+
+  it("rejects more than 20 keywords", () => {
+    const tooManyKeywords = Array(21).fill("keyword");
+    expect(() =>
+      syncRequestSchema.parse({
+        keywords: tooManyKeywords,
+        includeAllKeywords: true,
+      }),
+    ).toThrow("Maximum 20 keywords allowed");
+  });
+
+  it("rejects keywords longer than 100 characters", () => {
+    expect(() =>
+      syncRequestSchema.parse({
+        keywords: ["a".repeat(101)],
+        includeAllKeywords: true,
+      }),
+    ).toThrow();
+  });
+
+  it("accepts keywords exactly 100 characters", () => {
+    const result = syncRequestSchema.parse({
+      keywords: ["a".repeat(100)],
+      includeAllKeywords: true,
+    });
+    expect(result.keywords).toEqual(["a".repeat(100)]);
   });
 });
