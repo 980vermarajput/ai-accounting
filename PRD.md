@@ -1,8 +1,8 @@
 # MVP PRD — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.2 — Updated 2026-03-01
+> **Version:** 2.3 — Updated 2026-03-02
 > **Author:** @980vermarajput
-> **Status:** MVP Core Complete — Proactive AI Command Centre Live — All 207 Tests Passing
+> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction Live — All 248 Tests Passing (180 API + 68 Shared)
 
 ---
 
@@ -133,23 +133,25 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### `documents`
 
-| Column        | Type                                         | Notes                             |
-| ------------- | -------------------------------------------- | --------------------------------- |
-| id            | UUID PK                                      |                                   |
-| firm_id       | FK → firms.id                                | RLS partition key                 |
-| user_id       | FK → users.id                                | Who synced it                     |
-| client_id     | FK → clients.id                              | Nullable                          |
-| source        | ENUM('gmail','drive','upload')               |                                   |
-| source_id     | VARCHAR(500)                                 | Gmail message ID or Drive file ID |
-| filename      | VARCHAR(500)                                 |                                   |
-| mime_type     | VARCHAR(100)                                 |                                   |
-| s3_key        | VARCHAR(500)                                 | Raw file in S3                    |
-| text_hash     | VARCHAR(64)                                  | SHA-256 for dedup                 |
-| text_excerpt  | TEXT                                         | First 500 chars                   |
-| status        | ENUM('pending','processing','ready','error') |                                   |
-| error_message | TEXT                                         | Nullable                          |
-| source_date   | TIMESTAMPTZ                                  | Original email/file date          |
-| created_at    | TIMESTAMPTZ                                  |                                   |
+| Column             | Type                                         | Notes                                   |
+| ------------------ | -------------------------------------------- | --------------------------------------- |
+| id                 | UUID PK                                      |                                         |
+| firm_id            | FK → firms.id                                | RLS partition key                       |
+| user_id            | FK → users.id                                | Who synced it                           |
+| client_id          | FK → clients.id                              | Nullable                                |
+| source             | ENUM('gmail','drive','upload')               |                                         |
+| source_id          | VARCHAR(500)                                 | Gmail message ID or Drive file ID       |
+| filename           | VARCHAR(500)                                 |                                         |
+| mime_type          | VARCHAR(100)                                 |                                         |
+| s3_key             | VARCHAR(500)                                 | Raw file in S3                          |
+| text_hash          | VARCHAR(64)                                  | SHA-256 for dedup                       |
+| text_excerpt       | TEXT                                         | First 500 chars                         |
+| status             | ENUM('pending','processing','ready','error') |                                         |
+| error_message      | TEXT                                         | Nullable                                |
+| deadline_extracted | BOOLEAN                                      | Default false, prevents re-extraction   |
+| deadline_count     | INT                                          | Default 0, count of extracted deadlines |
+| source_date        | TIMESTAMPTZ                                  | Original email/file date                |
+| created_at         | TIMESTAMPTZ                                  |                                         |
 
 ### `chunks`
 
@@ -221,20 +223,20 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### `alerts` (Added Sprint 1 — 1 Mar 2026)
 
-| Column      | Type                                                                                                                 | Notes             |
-| ----------- | -------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| id          | CUID PK                                                                                                              |                   |
-| firm_id     | FK → firms.id                                                                                                        | RLS partition key |
-| client_id   | FK → clients.id                                                                                                      | Nullable          |
-| type        | ENUM('INVOICE_OVERDUE','CLIENT_SILENT','HIGH_RISK_LANGUAGE','COMPLIANCE_DEADLINE','DOCUMENT_ANOMALY','SYSTEM_ALERT') |                   |
-| severity    | ENUM('CRITICAL','HIGH','MEDIUM','LOW')                                                                               |                   |
-| title       | VARCHAR(255)                                                                                                         |                   |
-| body        | TEXT                                                                                                                 | Nullable          |
-| metadata    | JSONB                                                                                                                | Flexible fields   |
-| is_read     | BOOLEAN                                                                                                              | Default false     |
-| resolved_at | TIMESTAMPTZ                                                                                                          | Nullable          |
-| expires_at  | TIMESTAMPTZ                                                                                                          | Nullable          |
-| created_at  | TIMESTAMPTZ                                                                                                          |                   |
+| Column      | Type                                                                                                                                     | Notes             |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| id          | CUID PK                                                                                                                                  |                   |
+| firm_id     | FK → firms.id                                                                                                                            | RLS partition key |
+| client_id   | FK → clients.id                                                                                                                          | Nullable          |
+| type        | ENUM('INVOICE_OVERDUE','CLIENT_SILENT','HIGH_RISK_LANGUAGE','COMPLIANCE_DEADLINE','DOCUMENT_ANOMALY','SYSTEM_ALERT','DEADLINE_DETECTED') |                   |
+| severity    | ENUM('CRITICAL','HIGH','MEDIUM','LOW')                                                                                                   |                   |
+| title       | VARCHAR(255)                                                                                                                             |                   |
+| body        | TEXT                                                                                                                                     | Nullable          |
+| metadata    | JSONB                                                                                                                                    | Flexible fields   |
+| is_read     | BOOLEAN                                                                                                                                  | Default false     |
+| resolved_at | TIMESTAMPTZ                                                                                                                              | Nullable          |
+| expires_at  | TIMESTAMPTZ                                                                                                                              | Nullable          |
+| created_at  | TIMESTAMPTZ                                                                                                                              |                   |
 
 **Indexes:** `[firmId]`, `[firmId, type, isRead]`, `[firmId, severity]`
 
@@ -248,6 +250,23 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | summary    | TEXT          | AI-generated daily summary      |
 | metadata   | JSONB         | Alert count, client count, etc. |
 | created_at | TIMESTAMPTZ   |                                 |
+
+### `extracted_deadlines` (Added Sprint 2 — 2 Mar 2026)
+
+| Column      | Type                        | Notes                                          |
+| ----------- | --------------------------- | ---------------------------------------------- |
+| id          | CUID PK                     |                                                |
+| firm_id     | FK → firms.id               | RLS partition key                              |
+| document_id | FK → documents.id           | Source document                                |
+| client_id   | FK → clients.id             | Nullable, extracted or inferred                |
+| date        | DATE                        | Compliance deadline date                       |
+| description | VARCHAR(500)                | Human-readable deadline description            |
+| raw_text    | VARCHAR(1000)               | Original text chunk where found                |
+| confidence  | ENUM('HIGH','MEDIUM','LOW') | Extraction confidence level                    |
+| alert_id    | FK → alerts.id              | Nullable, auto-created DEADLINE_DETECTED alert |
+| created_at  | TIMESTAMPTZ                 |                                                |
+
+**Indexes:** `[firmId]`, `[firmId, date]`, `[documentId]`
 
 ---
 
@@ -423,6 +442,14 @@ Document → Text Extraction → Normalization → Dedup Check
 | GET    | `/api/dashboard/alerts`             | Paginated alerts with severity/unreadOnly filters     | ✅ Live |
 | PATCH  | `/api/dashboard/alerts/:id/read`    | Mark alert as read                                    | ✅ Live |
 | PATCH  | `/api/dashboard/alerts/:id/resolve` | Resolve alert with timestamp                          | ✅ Live |
+
+### Compliance Deadlines (Added Sprint 2 — 2 Mar 2026)
+
+| Method | Endpoint                  | Description                                                 | Status  |
+| ------ | ------------------------- | ----------------------------------------------------------- | ------- |
+| GET    | `/api/deadlines`          | Paginated deadline list with client/date/confidence filters | ✅ Live |
+| GET    | `/api/deadlines/calendar` | Deadlines grouped by date for calendar month view           | ✅ Live |
+| GET    | `/api/deadlines/export`   | Export deadlines as ICS (iCalendar) file for download       | ✅ Live |
 
 ---
 

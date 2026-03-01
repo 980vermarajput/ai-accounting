@@ -95,6 +95,7 @@ model Firm {
   chatSessions  ChatSession[]
   alerts        Alert[]
   briefings     DailyBriefing[]
+  extractedDeadlines ExtractedDeadline[]
 
   @@map("firms")
 }
@@ -145,6 +146,7 @@ model Client {
   chatSessions ChatSession[]
   chatMessages ChatMessage[]
   alerts       Alert[]
+  extractedDeadlines ExtractedDeadline[]
 
   @@index([firmId])
   @@map("clients")
@@ -167,15 +169,18 @@ model Document {
   textExcerpt    String?        @map("text_excerpt")
   status         DocumentStatus @default(pending)
   errorMessage   String?        @map("error_message")
-  summary        String?
-  entities       Json?          @db.JsonB
-  sourceDate     DateTime       @map("source_date") @db.Timestamptz()
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  summary            String?
+  entities           Json?          @db.JsonB
+  deadlineExtracted  Boolean        @default(false) @map("deadline_extracted")
+  deadlineCount      Int            @default(0) @map("deadline_count")
+  sourceDate         DateTime       @map("source_date") @db.Timestamptz()
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz()
 
-  firm   Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  user   User    @relation(fields: [userId], references: [id])
-  client Client? @relation(fields: [clientId], references: [id])
-  chunks Chunk[]
+  firm               Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user               User    @relation(fields: [userId], references: [id])
+  client             Client? @relation(fields: [clientId], references: [id])
+  chunks             Chunk[]
+  extractedDeadlines ExtractedDeadline[]
 
   @@index([firmId])
   @@index([firmId, source])
@@ -334,6 +339,30 @@ enum MessageRole {
   user
   assistant
   system // For context/tool outputs
+}
+
+// ─── Extracted Deadlines ─────────────────────────────
+
+model ExtractedDeadline {
+  id          String   @id @default(cuid())
+  firmId      String   @map("firm_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  clientId    String?  @map("client_id") @db.Uuid
+  date        DateTime @db.Date
+  description String
+  rawText     String   @db.Text
+  confidence  String   @default("MEDIUM") @db.VarChar(10)
+  alertId     String?  @map("alert_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm     Firm      @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  document Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([firmId])
+  @@index([firmId, date])
+  @@index([documentId])
+  @@map("extracted_deadlines")
 }
 
 // ─── Alerts ──────────────────────────────────────────

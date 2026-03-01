@@ -8,6 +8,10 @@ import {
   feedbackSchema,
   sendDraftSchema,
   syncRequestSchema,
+  deadlineListQuerySchema,
+  deadlineCalendarQuerySchema,
+  extractedDeadlineSchema,
+  deadlineConfidenceSchema,
 } from "./schemas";
 
 // ─── googleCallbackSchema ─────────────────────────────────────────────────────
@@ -71,9 +75,7 @@ describe("chatRequestSchema", () => {
   });
 
   it("rejects a query over 5000 characters", () => {
-    expect(() =>
-      chatRequestSchema.parse({ query: "a".repeat(5001) }),
-    ).toThrow();
+    expect(() => chatRequestSchema.parse({ query: "a".repeat(5001) })).toThrow();
   });
 
   it("rejects an invalid source in filters", () => {
@@ -126,9 +128,7 @@ describe("documentListQuerySchema", () => {
   });
 
   it("rejects an invalid source value", () => {
-    expect(() =>
-      documentListQuerySchema.parse({ source: "dropbox" }),
-    ).toThrow();
+    expect(() => documentListQuerySchema.parse({ source: "dropbox" })).toThrow();
   });
 
   it("rejects an invalid status value", () => {
@@ -168,9 +168,7 @@ describe("createClientSchema", () => {
   });
 
   it("rejects a missing name", () => {
-    expect(() =>
-      createClientSchema.parse({ identifier: "ACME-001" }),
-    ).toThrow();
+    expect(() => createClientSchema.parse({ identifier: "ACME-001" })).toThrow();
   });
 
   it("rejects an empty name", () => {
@@ -395,5 +393,144 @@ describe("syncRequestSchema", () => {
       includeAllKeywords: true,
     });
     expect(result.keywords).toEqual(["a".repeat(100)]);
+  });
+});
+
+// ─── deadlineConfidenceSchema ───────────────────────────────────────────────
+
+describe("deadlineConfidenceSchema", () => {
+  it("accepts HIGH", () => {
+    expect(deadlineConfidenceSchema.parse("HIGH")).toBe("HIGH");
+  });
+
+  it("accepts MEDIUM", () => {
+    expect(deadlineConfidenceSchema.parse("MEDIUM")).toBe("MEDIUM");
+  });
+
+  it("accepts LOW", () => {
+    expect(deadlineConfidenceSchema.parse("LOW")).toBe("LOW");
+  });
+
+  it("rejects invalid values", () => {
+    expect(() => deadlineConfidenceSchema.parse("UNKNOWN")).toThrow();
+  });
+});
+
+// ─── deadlineListQuerySchema ────────────────────────────────────────────────
+
+describe("deadlineListQuerySchema", () => {
+  it("applies defaults for page and limit", () => {
+    const result = deadlineListQuerySchema.parse({});
+    expect(result.page).toBe(1);
+    expect(result.limit).toBe(50);
+  });
+
+  it("accepts all filters", () => {
+    const result = deadlineListQuerySchema.parse({
+      page: "2",
+      limit: "10",
+      clientId: "00000000-0000-0000-0000-000000000001",
+      from: "2025-03-01",
+      to: "2025-03-31",
+      confidence: "HIGH",
+    });
+    expect(result.page).toBe(2);
+    expect(result.limit).toBe(10);
+    expect(result.confidence).toBe("HIGH");
+  });
+
+  it("rejects limit > 100", () => {
+    expect(() => deadlineListQuerySchema.parse({ limit: "101" })).toThrow();
+  });
+
+  it("rejects invalid confidence value", () => {
+    expect(() => deadlineListQuerySchema.parse({ confidence: "INVALID" })).toThrow();
+  });
+});
+
+// ─── deadlineCalendarQuerySchema ────────────────────────────────────────────
+
+describe("deadlineCalendarQuerySchema", () => {
+  it("accepts valid month and year", () => {
+    const result = deadlineCalendarQuerySchema.parse({
+      month: "3",
+      year: "2025",
+    });
+    expect(result.month).toBe(3);
+    expect(result.year).toBe(2025);
+  });
+
+  it("rejects month < 1", () => {
+    expect(() =>
+      deadlineCalendarQuerySchema.parse({ month: "0", year: "2025" }),
+    ).toThrow();
+  });
+
+  it("rejects month > 12", () => {
+    expect(() =>
+      deadlineCalendarQuerySchema.parse({ month: "13", year: "2025" }),
+    ).toThrow();
+  });
+
+  it("accepts optional clientId", () => {
+    const result = deadlineCalendarQuerySchema.parse({
+      month: "3",
+      year: "2025",
+      clientId: "00000000-0000-0000-0000-000000000001",
+    });
+    expect(result.clientId).toBe("00000000-0000-0000-0000-000000000001");
+  });
+});
+
+// ─── extractedDeadlineSchema ────────────────────────────────────────────────
+
+describe("extractedDeadlineSchema", () => {
+  it("accepts a valid deadline object", () => {
+    const result = extractedDeadlineSchema.parse({
+      id: "dl-1",
+      firmId: "firm-1",
+      documentId: "doc-1",
+      clientId: null,
+      date: "2025-03-15",
+      description: "GST filing deadline",
+      rawText: "GST filing deadline is 15/03/2025",
+      confidence: "HIGH",
+      alertId: null,
+      createdAt: "2025-03-01T00:00:00Z",
+    });
+    expect(result.id).toBe("dl-1");
+    expect(result.confidence).toBe("HIGH");
+  });
+
+  it("accepts deadline with document and client relations", () => {
+    const result = extractedDeadlineSchema.parse({
+      id: "dl-1",
+      firmId: "firm-1",
+      documentId: "doc-1",
+      date: "2025-03-15",
+      description: "TDS return",
+      rawText: "TDS return due",
+      confidence: "MEDIUM",
+      createdAt: "2025-03-01T00:00:00Z",
+      document: { id: "doc-1", filename: "tds-notice.pdf" },
+      client: { id: "client-1", name: "Mehta Traders" },
+    });
+    expect(result.document?.filename).toBe("tds-notice.pdf");
+    expect(result.client?.name).toBe("Mehta Traders");
+  });
+
+  it("rejects invalid confidence", () => {
+    expect(() =>
+      extractedDeadlineSchema.parse({
+        id: "dl-1",
+        firmId: "firm-1",
+        documentId: "doc-1",
+        date: "2025-03-15",
+        description: "test",
+        rawText: "test",
+        confidence: "INVALID",
+        createdAt: "2025-03-01T00:00:00Z",
+      }),
+    ).toThrow();
   });
 });

@@ -1,8 +1,8 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.3 — Updated 2026-03-01
+> **Version:** 2.4 — Updated 2026-03-02
 > **Author:** @980vermarajput
-> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre
+> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction
 > **Related:** [PRD v2.1](./PRD.md)
 
 ---
@@ -170,10 +170,10 @@
 │  │  │ Service  │ │ Service  │ │ Service  │ │ Service  │  │  │
 │  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │  │
 │  │                                                         │  │
-│  │  ┌──────────┐ ┌──────────┐                            │  │
-│  │  │ Alert    │ │ Briefing │                            │  │
-│  │  │ Detector │ │ Generator│                            │  │
-│  │  └──────────┘ └──────────┘                            │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐               │  │
+│  │  │ Alert    │ │ Briefing │ │ Deadline │               │  │
+│  │  │ Detector │ │ Generator│ │ Extractor│               │  │
+│  │  └──────────┘ └──────────┘ └──────────┘               │  │
 │  └─────────────────────────────────────────────────────────┘  │
 │                                │                              │
 │  ┌─────────────────────────────▼──────────────────────────┐  │
@@ -225,6 +225,14 @@
 │  │  │  │ • Strip signatures │     │                     │  │
 │  │  │  │ • Remove boilerplate│    │                     │  │
 │  │  │  │ • Dedup (SHA-256)  │     │                     │  │
+│  │  │  └─────────┬──────────┘     │                     │  │
+│  │  │            ▼                │                     │  │
+│  │  │  ┌────────────────────┐     │                     │  │
+│  │  │  │ Deadline Extractor │     │                     │  │
+│  │  │  │ • Regex patterns   │     │                     │  │
+│  │  │  │ • Compliance keywords│    │                     │  │
+│  │  │  │ • GPT-4o-mini LLM  │     │                     │  │
+│  │  │  │ • Create alerts    │     │                     │  │
 │  │  │  └─────────┬──────────┘     │                     │  │
 │  │  │            ▼                │                     │  │
 │  │  │  ┌────────────────────┐     │                     │  │
@@ -422,32 +430,35 @@ User       Frontend        API Server      PostgreSQL/pgvector    Redis Cache   
 
 ### 7.1 Schema Overview
 
-Our Prisma schema defines 12 core models with pgvector support and RLS:
+Our Prisma schema defines 13 core models with pgvector support and RLS:
 
-| Model             | Purpose                                  | RLS Key | Relationships                                                      |
-| ----------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------ |
-| **Firm**          | Organization/tenant root                 | firm_id | 1→many Users, Clients, ChatSessions, Alerts, DailyBriefings        |
-| **User**          | Team members (admins, staff)             | firm_id | many←one Firm; 1→many SyncJobs                                     |
-| **Client**        | Taxpayer/business entity                 | firm_id | many←one Firm; 1→many Documents, Alerts                            |
-| **Document**      | Uploaded files (Gmail, Drive, manual)    | firm_id | many←one Firm, Client; 1→many Chunks                               |
-| **Chunk**         | Text segments with embeddings            | firm_id | many←one Document; has vector(1536)                                |
-| **Query**         | RAG chat queries + feedback              | firm_id | many←one User; has clientId foreign key                            |
-| **SyncJob**       | Background sync status tracker           | firm_id | many←one User; tracks Gmail/Drive jobs; supports keyword filtering |
-| **AuditLog**      | Compliance + access tracking             | firm_id | logs all data modifications                                        |
-| **ChatSession**   | Conversation sessions (2hr expiry)       | firm_id | many←one Firm, User; 1→many ChatMessages; optional client context  |
-| **ChatMessage**   | Individual messages (user/assistant/sys) | N/A     | many←one ChatSession; tracks tokens, tools used, search results    |
-| **Alert**         | Proactive notifications for firm         | firm_id | many←one Firm, Client; type + severity + read/resolve state        |
-| **DailyBriefing** | AI-generated daily firm summary          | firm_id | many←one Firm; @@unique([firmId, date]); JSON metadata             |
+| Model                 | Purpose                                  | RLS Key | Relationships                                                                   |
+| --------------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| **Firm**              | Organization/tenant root                 | firm_id | 1→many Users, Clients, ChatSessions, Alerts, DailyBriefings, ExtractedDeadlines |
+| **User**              | Team members (admins, staff)             | firm_id | many←one Firm; 1→many SyncJobs                                                  |
+| **Client**            | Taxpayer/business entity                 | firm_id | many←one Firm; 1→many Documents, Alerts, ExtractedDeadlines                     |
+| **Document**          | Uploaded files (Gmail, Drive, manual)    | firm_id | many←one Firm, Client; 1→many Chunks, ExtractedDeadlines                        |
+| **Chunk**             | Text segments with embeddings            | firm_id | many←one Document; has vector(1536)                                             |
+| **Query**             | RAG chat queries + feedback              | firm_id | many←one User; has clientId foreign key                                         |
+| **SyncJob**           | Background sync status tracker           | firm_id | many←one User; tracks Gmail/Drive jobs; supports keyword filtering              |
+| **AuditLog**          | Compliance + access tracking             | firm_id | logs all data modifications                                                     |
+| **ChatSession**       | Conversation sessions (2hr expiry)       | firm_id | many←one Firm, User; 1→many ChatMessages; optional client context               |
+| **ChatMessage**       | Individual messages (user/assistant/sys) | N/A     | many←one ChatSession; tracks tokens, tools used, search results                 |
+| **Alert**             | Proactive notifications for firm         | firm_id | many←one Firm, Client; type + severity + read/resolve state                     |
+| **DailyBriefing**     | AI-generated daily firm summary          | firm_id | many←one Firm; @@unique([firmId, date]); JSON metadata                          |
+| **ExtractedDeadline** | Compliance deadlines from documents      | firm_id | many←one Firm, Document, Client; has Alert relation for notifications           |
 
 **Key Features:**
 
 - **Multi-tenancy via firm_id partition key** on every table (ChatMessages inherit from ChatSession)
 - **pgvector integration** on Chunk.embedding (1536-dim, IVFFlat index for cosine similarity)
-- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback, MessageRole, AlertType, Severity
-- **Cascade deletes** for data cleanup (Document → Chunks, ChatSession → ChatMessages)
+- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback, MessageRole, AlertType, Severity, DeadlineConfidence
+- **Cascade deletes** for data cleanup (Document → Chunks + ExtractedDeadlines, ChatSession → ChatMessages)
 - **Timestamps** on every entity (createdAt, updatedAt)
 - **Automatic session expiry** via `expiresAt` column (2hr default, cleanup via admin endpoint)
 - **Keyword-based sync filtering** via `keywords[]` and `includeAllKeywords` boolean (AND/OR logic)
+- **Deadline extraction pipeline** integrated into document processing (step 10 after summaries)
+- **Document processing flags** (`deadlineExtracted`, `deadlineCount`) prevent re-processing
 
 ### 7.2 Multi-Tenancy Strategy
 

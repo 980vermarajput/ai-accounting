@@ -25,6 +25,7 @@ import { extractText } from "../lib/extractor";
 import { chunkText } from "../lib/chunker";
 import { addEmbeddingJob } from "../queues/embedding.queue";
 import { generateDocumentSummary, rebuildFirmSnapshot } from "../lib/summarizer";
+import { extractDeadlinesFromDocument } from "../lib/deadline-extractor";
 import type { ExtractionJobData } from "../queues/extraction.queue";
 
 // ─── Gmail helpers ────────────────────────────────────────────────
@@ -340,7 +341,23 @@ async function processExtraction(job: Job<ExtractionJobData>): Promise<void> {
       );
     }
 
-    // 10. Kick off embedding pipeline
+    // 10. Extract compliance deadlines (non-blocking)
+    try {
+      const deadlines = await extractDeadlinesFromDocument(documentId);
+      if (deadlines.length > 0) {
+        console.log(
+          `[Extraction] Job ${job.id}: extracted ${deadlines.length} deadline(s) for ${documentId}`,
+        );
+      }
+    } catch (deadlineErr) {
+      // Non-fatal — document is still ready, just without deadline extraction
+      console.warn(
+        `[Extraction] Job ${job.id}: deadline extraction failed:`,
+        deadlineErr instanceof Error ? deadlineErr.message : deadlineErr,
+      );
+    }
+
+    // 11. Kick off embedding pipeline
     if (chunks.length > 0) {
       await addEmbeddingJob({ documentId, firmId });
     }

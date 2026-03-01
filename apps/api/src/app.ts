@@ -13,6 +13,7 @@ import { errorHandler } from "./middleware/error-handler";
 import { clientsRouter } from "./routes/clients";
 import { adminRouter } from "./routes/admin";
 import { dashboardRouter } from "./routes/dashboard";
+import { deadlinesRouter } from "./routes/deadlines";
 
 const app: Express = express();
 
@@ -62,6 +63,7 @@ app.use("/api/drafts", draftsRouter);
 app.use("/api/clients", clientsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/deadlines", deadlinesRouter);
 
 // ─── 404 catch-all ───────────────────────────────────
 app.use((_req, res) => {

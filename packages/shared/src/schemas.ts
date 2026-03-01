@@ -100,6 +100,42 @@ export const sendDraftSchema = z.object({
 });
 export type SendDraftInput = z.infer<typeof sendDraftSchema>;
 
+// ─── Deadline Schemas ────────────────────────────────
+
+export const deadlineConfidenceSchema = z.enum(["HIGH", "MEDIUM", "LOW"]);
+
+export const deadlineListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  clientId: z.string().uuid().optional(),
+  from: z.string().optional(), // ISO date YYYY-MM-DD
+  to: z.string().optional(), // ISO date YYYY-MM-DD
+  confidence: deadlineConfidenceSchema.optional(),
+});
+export type DeadlineListQuery = z.infer<typeof deadlineListQuerySchema>;
+
+export const deadlineCalendarQuerySchema = z.object({
+  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2020).max(2100),
+  clientId: z.string().uuid().optional(),
+});
+export type DeadlineCalendarQuery = z.infer<typeof deadlineCalendarQuerySchema>;
+
+export const extractedDeadlineSchema = z.object({
+  id: z.string(),
+  firmId: z.string(),
+  documentId: z.string(),
+  clientId: z.string().nullable().optional(),
+  date: z.string(),
+  description: z.string(),
+  rawText: z.string(),
+  confidence: deadlineConfidenceSchema,
+  alertId: z.string().nullable().optional(),
+  createdAt: z.string(),
+  document: z.object({ id: z.string(), filename: z.string() }).optional(),
+  client: z.object({ id: z.string(), name: z.string() }).optional(),
+});
+
 // ─── Dashboard / Alert Schemas ───────────────────────
 
 export const alertTypeSchema = z.enum([

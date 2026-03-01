@@ -63,6 +63,8 @@ export interface Document {
   errorMessage?: string;
   summary?: string;
   entities?: DocumentEntities;
+  deadlineExtracted: boolean;
+  deadlineCount: number;
   sourceDate: Date;
   createdAt: Date;
 }
@@ -189,6 +191,35 @@ export interface ThreadSummaryResponse {
     earliest: Date;
     latest: Date;
   };
+}
+
+// ─── Extracted Deadlines ─────────────────────────────
+
+export type DeadlineConfidence = "HIGH" | "MEDIUM" | "LOW";
+
+export interface ExtractedDeadline {
+  id: string;
+  firmId: string;
+  documentId: string;
+  clientId?: string;
+  date: Date;
+  description: string;
+  rawText: string;
+  confidence: DeadlineConfidence;
+  alertId?: string;
+  createdAt: Date;
+  document?: { id: string; filename: string };
+  client?: { id: string; name: string };
+}
+
+export interface DeadlineCalendarEntry {
+  date: string; // ISO date (YYYY-MM-DD)
+  deadlines: ExtractedDeadline[];
+}
+
+export interface DeadlineListResponse {
+  deadlines: ExtractedDeadline[];
+  total: number;
 }
 
 // ─── Alerts & Briefings ──────────────────────────────

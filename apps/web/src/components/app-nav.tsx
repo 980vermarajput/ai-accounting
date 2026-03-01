@@ -14,12 +14,14 @@ import {
   RefreshCw,
   Mail,
   LogOut,
+  CalendarClock,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/documents", label: "Documents", icon: FileText },
+  { href: "/deadlines", label: "Deadlines", icon: CalendarClock },
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/sync", label: "Sync", icon: RefreshCw },
   { href: "/drafts", label: "Drafts", icon: Mail },
