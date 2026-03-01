@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { setToken } from "../../../lib/api";
 import { useUser } from "../../../contexts/user-context";
+import { Spinner } from "@/components/ui";
 
 /**
  * Handles the OAuth callback redirect.
@@ -43,9 +44,9 @@ function CallbackHandler() {
 
 export default function AuthCallbackPage() {
   return (
-    <div className="flex h-screen items-center justify-center gap-3">
-      <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-primary-600 rounded-full animate-spin" />
-      <span className="text-sm text-gray-500">Completing sign in…</span>
+    <div className="flex h-screen items-center justify-center gap-3 bg-surface-secondary">
+      <Spinner size="sm" />
+      <span className="text-sm text-muted">Completing sign in…</span>
       <Suspense>
         <CallbackHandler />
       </Suspense>

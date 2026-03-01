@@ -5,6 +5,33 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { ApiResponse } from "@ai-accounting/shared";
 import { apiFetch } from "@/lib/api";
+import { fmtDate, fmtDateTime } from "@/lib/utils";
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  Badge,
+  StatusBadge,
+  FlashMessage,
+  EmptyState,
+  Spinner,
+} from "@/components/ui";
+import {
+  Mail,
+  HardDrive,
+  Paperclip,
+  FileText,
+  MessageSquare,
+  ArrowLeft,
+  RefreshCw,
+  ChevronRight,
+  AlertTriangle,
+  Database,
+  Clock,
+} from "lucide-react";
 
 // Types based on the API endpoint implementation
 interface ClientSummaryResponse {
@@ -60,7 +87,7 @@ export default function ClientDetailPage() {
   const fetchClientSummary = async () => {
     try {
       const res = await apiFetch<ApiResponse<ClientSummaryResponse>>(
-        `/api/clients/${clientId}/summary`
+        `/api/clients/${clientId}/summary`,
       );
       if (res.success && res.data) {
         setData(res.data);
@@ -86,26 +113,26 @@ export default function ClientDetailPage() {
     try {
       const res = await apiFetch<ApiResponse<{ assignedCount: number; message: string }>>(
         `/api/clients/${clientId}/resync`,
-        { method: "POST" }
+        { method: "POST" },
       );
 
       if (res.success && res.data) {
         setResyncMessage({
           text: res.data.message,
-          type: "success"
+          type: "success",
         });
         // Refresh the client summary to show updated document counts
         void fetchClientSummary();
       } else {
         setResyncMessage({
           text: "Failed to resync documents",
-          type: "error"
+          type: "error",
         });
       }
     } catch (err) {
       setResyncMessage({
         text: err instanceof Error ? err.message : "Failed to resync documents",
-        type: "error"
+        type: "error",
       });
     } finally {
       setIsResyncingDocs(false);
@@ -114,54 +141,34 @@ export default function ClientDetailPage() {
     }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const formatDateTime = (date: string) => {
-    return new Date(date).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getSourceIcon = (source: string) => {
+  const sourceIcon = (source: string) => {
     switch (source) {
-      case "gmail": return "✉️";
-      case "drive": return "📁";
-      case "upload": return "📎";
-      default: return "📄";
+      case "gmail":
+        return <Mail className="h-4 w-4 text-red-500" />;
+      case "drive":
+        return <HardDrive className="h-4 w-4 text-yellow-600" />;
+      case "upload":
+        return <Paperclip className="h-4 w-4 text-muted" />;
+      default:
+        return <FileText className="h-4 w-4 text-muted" />;
     }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const styles = {
-      pending: "bg-gray-100 text-gray-700",
-      processing: "bg-blue-100 text-blue-700",
-      ready: "bg-green-100 text-green-700",
-      error: "bg-red-100 text-red-700",
-    };
-    return styles[status as keyof typeof styles] || styles.pending;
   };
 
   if (isLoading) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-white p-6 rounded-xl border">
-                <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-                <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-              </div>
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <Spinner size="lg" />
+        <p className="text-sm text-muted">Loading client details…</p>
+        <div className="w-full max-w-6xl mx-auto mt-6 animate-pulse space-y-4">
+          <div className="h-8 bg-surface-secondary rounded w-1/3" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}>
+                <CardContent>
+                  <div className="h-4 bg-surface-secondary rounded w-1/2 mb-2" />
+                  <div className="h-8 bg-surface-secondary rounded w-1/3" />
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -172,14 +179,14 @@ export default function ClientDetailPage() {
   if (error || !data) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
-        <div className="text-center py-12">
-          <div className="text-red-500 mb-4">❌</div>
-          <p className="text-red-600 mb-4">{error || "Client not found"}</p>
-          <Link
-            href="/clients"
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            ← Back to Clients
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <AlertTriangle className="h-8 w-8 text-red-500" />
+          <p className="text-sm text-red-600">{error || "Client not found"}</p>
+          <Link href="/clients">
+            <Button variant="link" size="sm">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Clients
+            </Button>
           </Link>
         </div>
       </div>
@@ -190,105 +197,123 @@ export default function ClientDetailPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm text-muted mb-4">
+        <Link href="/clients" className="hover:text-gray-700 transition-colors">
+          Clients
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="text-gray-900 font-medium">{client.name}</span>
+      </nav>
+
       {/* Header */}
-      <div className="mb-6">
-        <nav className="text-sm text-gray-500 mb-2">
-          <Link href="/clients" className="hover:text-gray-700">
-            Clients
-          </Link>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900">{client.name}</span>
-        </nav>
-        <div className="flex items-center gap-4 mb-2">
-          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-            <span className="text-blue-600 font-bold text-lg">
-              {client.name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
-            <p className="text-gray-500 text-sm">
-              {client.identifier}
-            </p>
-          </div>
+      <div className="mb-6 flex items-center gap-4">
+        <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+          <span className="text-primary-600 font-bold text-lg">
+            {client.name.charAt(0).toUpperCase()}
+          </span>
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
+          <p className="text-muted text-sm">{client.identifier}</p>
         </div>
         {client.emailDomain && (
-          <div className="text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-full inline-block">
-            📧 {client.emailDomain}
-          </div>
+          <Badge variant="outline" className="ml-2 gap-1">
+            <Mail className="h-3 w-3" />
+            {client.emailDomain}
+          </Badge>
         )}
       </div>
 
       {/* Resync Message */}
       {resyncMessage && (
-        <div
-          className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
-            resyncMessage.type === "success"
-              ? "bg-green-50 text-green-700 border border-green-200"
-              : "bg-red-50 text-red-700 border border-red-200"
-          }`}
-        >
-          {resyncMessage.text}
-        </div>
+        <FlashMessage
+          variant={resyncMessage.type}
+          message={resyncMessage.text}
+          className="mb-4"
+          onDismiss={() => setResyncMessage(null)}
+        />
       )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="text-sm font-medium text-gray-500 mb-1">Documents</div>
-          <div className="text-2xl font-bold text-gray-900">{summary.totalDocuments}</div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="text-sm font-medium text-gray-500 mb-1">Queries</div>
-          <div className="text-2xl font-bold text-gray-900">{summary.totalQueries}</div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="text-sm font-medium text-gray-500 mb-1">Chunks</div>
-          <div className="text-2xl font-bold text-gray-900">{summary.totalChunks}</div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="text-sm font-medium text-gray-500 mb-1">Last Contact</div>
-          <div className="text-sm font-medium text-gray-900">
-            {summary.lastCommunicationDate
-              ? formatDate(summary.lastCommunicationDate)
-              : "Never"
-            }
-          </div>
-        </div>
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-2 text-muted mb-1">
+              <FileText className="h-4 w-4" />
+              <span className="text-sm font-medium">Documents</span>
+            </div>
+            <div className="text-2xl font-bold text-gray-900">
+              {summary.totalDocuments}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-2 text-muted mb-1">
+              <MessageSquare className="h-4 w-4" />
+              <span className="text-sm font-medium">Queries</span>
+            </div>
+            <div className="text-2xl font-bold text-gray-900">{summary.totalQueries}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-2 text-muted mb-1">
+              <Database className="h-4 w-4" />
+              <span className="text-sm font-medium">Chunks</span>
+            </div>
+            <div className="text-2xl font-bold text-gray-900">{summary.totalChunks}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-2 text-muted mb-1">
+              <Clock className="h-4 w-4" />
+              <span className="text-sm font-medium">Last Contact</span>
+            </div>
+            <div className="text-sm font-medium text-gray-900">
+              {summary.lastCommunicationDate
+                ? fmtDate(summary.lastCommunicationDate)
+                : "Never"}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Recent Documents */}
+      {/* Recent Documents & Recent Queries */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900 mb-1">Recent Documents</h3>
-            <p className="text-sm text-gray-500">Latest 5 documents for this client</p>
-          </div>
-          <div className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Documents</CardTitle>
+            <CardDescription>Latest 5 documents for this client</CardDescription>
+          </CardHeader>
+          <CardContent>
             {recentDocuments.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <span className="text-4xl mb-2 block">📄</span>
-                <p className="text-sm">No documents yet</p>
-              </div>
+              <EmptyState
+                icon={<FileText className="h-5 w-5" />}
+                title="No documents yet"
+              />
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {recentDocuments.map((doc) => (
-                  <div key={doc.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                    <span className="text-lg">{getSourceIcon(doc.source)}</span>
+                  <div
+                    key={doc.id}
+                    className="flex items-start gap-3 p-3 bg-surface-secondary rounded-lg"
+                  >
+                    <span className="mt-0.5">{sourceIcon(doc.source)}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-gray-900 truncate text-sm">
                           {doc.filename}
                         </span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(doc.status)}`}>
-                          {doc.status}
-                        </span>
+                        <StatusBadge status={doc.status} />
                       </div>
-                      <div className="text-xs text-gray-500 mb-1">
-                        {formatDate(doc.sourceDate)}
+                      <div className="text-xs text-muted mb-1">
+                        {fmtDate(doc.sourceDate)}
                       </div>
                       {doc.summary && (
-                        <div className="text-xs text-gray-600 line-clamp-2">
+                        <div className="text-xs text-muted-foreground line-clamp-2">
                           {doc.summary}
                         </div>
                       )}
@@ -297,68 +322,63 @@ export default function ClientDetailPage() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Recent Queries */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900 mb-1">Recent Queries</h3>
-            <p className="text-sm text-gray-500">Latest questions asked about this client</p>
-          </div>
-          <div className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Queries</CardTitle>
+            <CardDescription>Latest questions asked about this client</CardDescription>
+          </CardHeader>
+          <CardContent>
             {recentQueries.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <span className="text-4xl mb-2 block">💭</span>
-                <p className="text-sm">No queries yet</p>
-              </div>
+              <EmptyState
+                icon={<MessageSquare className="h-5 w-5" />}
+                title="No queries yet"
+              />
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {recentQueries.map((query) => (
-                  <div key={query.id} className="p-3 bg-gray-50 rounded-lg">
+                  <div key={query.id} className="p-3 bg-surface-secondary rounded-lg">
                     <div className="text-sm text-gray-900 mb-1 line-clamp-2">
                       {query.queryText}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {formatDateTime(query.createdAt)}
+                    <div className="text-xs text-muted">
+                      {fmtDateTime(query.createdAt)}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Actions */}
-      <div className="mt-8 flex gap-4 flex-wrap">
-        <Link
-          href={`/chat?clientId=${client.id}`}
-          className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          💬 Ask about this client
+      <div className="mt-8 flex gap-3 flex-wrap">
+        <Link href={`/chat?clientId=${client.id}`}>
+          <Button variant="primary" size="lg">
+            <MessageSquare className="h-4 w-4" />
+            Ask about this client
+          </Button>
         </Link>
-        <Link
-          href={`/documents?clientId=${client.id}`}
-          className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          📄 View all documents
+        <Link href={`/documents?clientId=${client.id}`}>
+          <Button variant="secondary" size="lg">
+            <FileText className="h-4 w-4" />
+            View all documents
+          </Button>
         </Link>
         {client.emailDomain && (
-          <button
+          <Button
+            variant="secondary"
+            size="lg"
             onClick={handleResyncDocuments}
-            disabled={isResyncingDocs}
-            className="px-6 py-3 border border-orange-300 text-orange-700 font-medium rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            loading={isResyncingDocs}
           >
-            {isResyncingDocs ? (
-              <>
-                <span className="inline-block w-4 h-4 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin mr-2" />
-                Re-syncing...
-              </>
-            ) : (
-              "🔄 Re-sync Documents"
-            )}
-          </button>
+            {!isResyncingDocs && <RefreshCw className="h-4 w-4" />}
+            {isResyncingDocs ? "Re-syncing…" : "Re-sync Documents"}
+          </Button>
         )}
       </div>
     </div>

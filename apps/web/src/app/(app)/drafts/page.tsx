@@ -7,6 +7,24 @@ import type {
   GmailDraftResponse,
 } from "@ai-accounting/shared";
 import { apiFetch } from "@/lib/api";
+import { cn, fmtDate } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
+import { FlashMessage } from "@/components/ui/flash-message";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Send,
+  Copy,
+  Check,
+  PenLine,
+  RefreshCw,
+  Mail,
+  Sparkles,
+  FileText,
+} from "lucide-react";
 
 export default function DraftsPage() {
   // ─── Form state ─────────────────────────────────────────────────
@@ -26,9 +44,7 @@ export default function DraftsPage() {
   // ─── Gmail send state ────────────────────────────────────────────
   const [recipientEmail, setRecipientEmail] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [gmailResult, setGmailResult] = useState<GmailDraftResponse | null>(
-    null,
-  );
+  const [gmailResult, setGmailResult] = useState<GmailDraftResponse | null>(null);
 
   // ─── UI state ────────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -72,17 +88,14 @@ export default function DraftsPage() {
     setIsRefining(true);
     setError(null);
     try {
-      const res = await apiFetch<ApiResponse<DraftResponse>>(
-        "/api/drafts/refine",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            draftText,
-            instructions: refineInstructions.trim(),
-          }),
-        },
-      );
+      const res = await apiFetch<ApiResponse<DraftResponse>>("/api/drafts/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftText,
+          instructions: refineInstructions.trim(),
+        }),
+      });
       if (res.success && res.data) {
         setDraft((prev) => ({
           ...res.data!,
@@ -102,9 +115,7 @@ export default function DraftsPage() {
   // ─── Copy to clipboard ───────────────────────────────────────────
 
   const copyToClipboard = async () => {
-    const full = draftSubject
-      ? `Subject: ${draftSubject}\n\n${draftText}`
-      : draftText;
+    const full = draftSubject ? `Subject: ${draftSubject}\n\n${draftText}` : draftText;
     await navigator.clipboard.writeText(full);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -118,24 +129,19 @@ export default function DraftsPage() {
     setError(null);
     setGmailResult(null);
     try {
-      const res = await apiFetch<ApiResponse<GmailDraftResponse>>(
-        "/api/drafts/send",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            to: recipientEmail.trim(),
-            subject: draftSubject || "(no subject)",
-            body: draftText,
-          }),
-        },
-      );
+      const res = await apiFetch<ApiResponse<GmailDraftResponse>>("/api/drafts/send", {
+        method: "POST",
+        body: JSON.stringify({
+          to: recipientEmail.trim(),
+          subject: draftSubject || "(no subject)",
+          body: draftText,
+        }),
+      });
       if (res.success && res.data) {
         setGmailResult(res.data);
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save draft to Gmail",
-      );
+      setError(err instanceof Error ? err.message : "Failed to save draft to Gmail");
     } finally {
       setIsSending(false);
     }
@@ -145,232 +151,237 @@ export default function DraftsPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Email Drafts</h1>
-        <p className="text-gray-500 text-sm">
-          AI-powered email drafting with context from your synced documents.
-        </p>
-      </div>
+      <PageHeader
+        title="Email Drafts"
+        description="AI-powered email drafting with context from your synced documents."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Left column: inputs ── */}
         <div className="space-y-4">
           {/* Generate form */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-            <h2 className="font-semibold text-gray-900 mb-4">Generate Draft</h2>
-            <form onSubmit={(e) => void generateDraft(e)} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  What should the email say?
-                </label>
-                <textarea
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-muted" />
+                Generate Draft
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => void generateDraft(e)} className="space-y-4">
+                <Textarea
+                  label="What should the email say?"
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
                   placeholder="e.g. Write a follow-up to the client about their GST filing deadline next week, referencing their balance sheet…"
                   rows={4}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Client ID{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
+                <Input
+                  label="Client ID"
+                  hint="Optional — restricts context to this client's files"
                   type="text"
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
-                  placeholder="UUID — restricts context to this client's files"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="UUID"
                 />
-              </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="includeContext"
-                  checked={includeContext}
-                  onChange={(e) => setIncludeContext(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label
-                  htmlFor="includeContext"
-                  className="text-sm text-gray-700 cursor-pointer"
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="includeContext"
+                    checked={includeContext}
+                    onChange={(e) => setIncludeContext(e.target.checked)}
+                    className="rounded border-border text-primary-600 focus:ring-primary-500"
+                  />
+                  <label
+                    htmlFor="includeContext"
+                    className="text-sm text-gray-700 cursor-pointer"
+                  >
+                    Include relevant context from synced documents
+                  </label>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isGenerating || !instructions.trim()}
+                  loading={isGenerating}
+                  className="w-full"
                 >
-                  Include relevant context from synced documents
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isGenerating || !instructions.trim()}
-                className="w-full py-2 px-4 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isGenerating ? "Generating…" : "Generate Draft"}
-              </button>
-            </form>
-          </div>
+                  <Send className="h-4 w-4" />
+                  {isGenerating ? "Generating…" : "Generate Draft"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
 
           {/* Refine panel — only visible after first generation */}
           {draft && (
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-              <h2 className="font-semibold text-gray-900 mb-3">Refine Draft</h2>
-              <div className="space-y-3">
-                <textarea
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-muted" />
+                  Refine Draft
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea
                   value={refineInstructions}
                   onChange={(e) => setRefineInstructions(e.target.value)}
                   placeholder="e.g. Make it shorter, use a more formal tone, mention invoice #1234…"
                   rows={3}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 />
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => void refineDraft()}
                   disabled={isRefining || !refineInstructions.trim()}
-                  className="w-full py-2 px-4 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  loading={isRefining}
+                  className="w-full"
                 >
+                  <RefreshCw className="h-4 w-4" />
                   {isRefining ? "Refining…" : "Refine Draft"}
-                </button>
-              </div>
-            </div>
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           {/* Context sources */}
           {draft && draft.sources.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-              <h2 className="font-semibold text-gray-900 mb-3">Context Used</h2>
-              <ul className="space-y-2">
-                {draft.sources.map((s) => (
-                  <li
-                    key={s.docId}
-                    className="text-xs border border-gray-100 rounded-lg p-3 bg-gray-50"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-gray-800 truncate">
-                        {s.filename}
-                      </span>
-                      <span className="text-gray-400 ml-2 shrink-0">
-                        {new Date(s.sourceDate).toLocaleDateString("en-IN")}
-                      </span>
-                    </div>
-                    <p className="text-gray-500 italic line-clamp-2">
-                      {s.excerpt}…
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted" />
+                  Context Used
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {draft.sources.map((s) => (
+                    <li
+                      key={s.docId}
+                      className="text-xs border border-border-light rounded-lg p-3 bg-surface-secondary"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-gray-800 truncate">
+                          {s.filename}
+                        </span>
+                        <span className="text-muted-foreground ml-2 shrink-0">
+                          {fmtDate(s.sourceDate)}
+                        </span>
+                      </div>
+                      <p className="text-muted italic line-clamp-2">{s.excerpt}…</p>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           )}
         </div>
 
         {/* ── Right column: draft output ── */}
         <div className="flex flex-col">
           {error && (
-            <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-sm">
-              {error}
-            </div>
+            <FlashMessage
+              variant="error"
+              message={error}
+              className="mb-4"
+              onDismiss={() => setError(null)}
+            />
           )}
 
           {draft ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col flex-1">
-              {/* Header row */}
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900">Your Draft</h2>
+            <Card className="flex flex-col flex-1">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted" />
+                  Your Draft
+                </CardTitle>
                 <div className="flex items-center gap-3">
                   {draft.metadata && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       ₹{draft.metadata.costEstimateInr.toFixed(4)} ·{" "}
                       {draft.metadata.latencyMs}ms
                     </span>
                   )}
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => void copyToClipboard()}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
                   >
-                    {copied ? "✓ Copied!" : "Copy"}
-                  </button>
+                    {copied ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    {copied ? "Copied!" : "Copy"}
+                  </Button>
                 </div>
-              </div>
+              </CardHeader>
 
-              {/* Gmail save success banner */}
-              {gmailResult && (
-                <div className="mb-4 px-4 py-3 rounded-lg bg-green-50 text-green-700 border border-green-200 text-sm flex items-center gap-2">
-                  <span>✅</span>
-                  <span>
-                    Draft saved to Gmail!{" "}
-                    <span className="text-xs text-green-500">
-                      (ID: {gmailResult.gmailDraftId})
-                    </span>
-                  </span>
-                </div>
-              )}
-
-              {/* Recipient + Save to Gmail */}
-              <div className="mb-4 flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
-                    Recipient Email
-                  </label>
-                  <input
-                    type="email"
-                    value={recipientEmail}
-                    onChange={(e) => {
-                      setRecipientEmail(e.target.value);
-                      setGmailResult(null);
-                    }}
-                    placeholder="client@example.com"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <CardContent className="flex flex-col flex-1 space-y-4">
+                {/* Gmail save success banner */}
+                {gmailResult && (
+                  <FlashMessage
+                    variant="success"
+                    message={`Draft saved to Gmail! (ID: ${gmailResult.gmailDraftId})`}
                   />
-                </div>
-                <button
-                  onClick={() => void sendToGmail()}
-                  disabled={
-                    isSending || !recipientEmail.trim() || !draftText.trim()
-                  }
-                  className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                >
-                  {isSending ? "Saving…" : "💌 Save to Gmail"}
-                </button>
-              </div>
+                )}
 
-              {/* Subject line */}
-              <div className="mb-3">
-                <label className="block text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
-                  Subject
-                </label>
-                <input
+                {/* Recipient + Save to Gmail */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Input
+                      label="Recipient Email"
+                      type="email"
+                      value={recipientEmail}
+                      onChange={(e) => {
+                        setRecipientEmail(e.target.value);
+                        setGmailResult(null);
+                      }}
+                      placeholder="client@example.com"
+                    />
+                  </div>
+                  <Button
+                    variant="success"
+                    onClick={() => void sendToGmail()}
+                    disabled={isSending || !recipientEmail.trim() || !draftText.trim()}
+                    loading={isSending}
+                    className="whitespace-nowrap"
+                  >
+                    <Mail className="h-4 w-4" />
+                    {isSending ? "Saving…" : "Save to Gmail"}
+                  </Button>
+                </div>
+
+                {/* Subject line */}
+                <Input
+                  label="Subject"
                   type="text"
                   value={draftSubject}
                   onChange={(e) => setDraftSubject(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Subject line…"
                 />
-              </div>
 
-              {/* Body */}
-              <div className="flex-1 flex flex-col">
-                <label className="block text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
-                  Body
-                </label>
-                <textarea
-                  value={draftText}
-                  onChange={(e) => setDraftText(e.target.value)}
-                  className="flex-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[320px]"
-                  placeholder="Draft body will appear here…"
-                />
-              </div>
-            </div>
+                {/* Body */}
+                <div className="flex-1 flex flex-col">
+                  <Textarea
+                    label="Body"
+                    value={draftText}
+                    onChange={(e) => setDraftText(e.target.value)}
+                    className="flex-1 min-h-[320px]"
+                    placeholder="Draft body will appear here…"
+                  />
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-10 flex flex-col items-center justify-center text-center flex-1 min-h-[300px]">
-              <div className="text-5xl mb-4">✍️</div>
-              <p className="text-sm text-gray-500 max-w-xs">
-                Enter your instructions on the left and click{" "}
-                <span className="font-medium text-blue-600">
-                  Generate Draft
-                </span>{" "}
-                to create a professional email.
-              </p>
-            </div>
+            <Card className="border-dashed flex-1 min-h-[300px] flex items-center justify-center bg-surface-secondary">
+              <EmptyState
+                icon={<PenLine className="h-6 w-6" />}
+                title="No draft yet"
+                description="Enter your instructions on the left and click Generate Draft to create a professional email."
+              />
+            </Card>
           )}
         </div>
       </div>

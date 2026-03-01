@@ -4,6 +4,21 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { ApiResponse, Client } from "@ai-accounting/shared";
 import { apiFetch } from "@/lib/api";
+import { fmtDate } from "@/lib/utils";
+import { Plus, Users, ArrowRight } from "lucide-react";
+import {
+  Button,
+  Card,
+  Input,
+  PageHeader,
+  FlashMessage,
+  EmptyState,
+  Spinner,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@/components/ui";
 
 type FlashState = { type: "success" | "error"; message: string } | null;
 
@@ -68,144 +83,120 @@ export default function ClientsPage() {
         showFlash("error", "Failed to create client: Invalid response");
       }
     } catch (err) {
-      showFlash("error", `Failed to create client: ${err instanceof Error ? err.message : "Unknown error"}`);
+      showFlash(
+        "error",
+        `Failed to create client: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
     }
-  };
-
-  const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
   };
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Clients</h1>
-          <p className="text-gray-500 text-sm">
-            Manage your client relationships and view document summaries
-          </p>
-        </div>
-        <button
-          onClick={() => setShowNewClientForm(true)}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          + New Client
-        </button>
-      </div>
+      <PageHeader
+        title="Clients"
+        description="Manage your client relationships and view document summaries"
+      >
+        <Button onClick={() => setShowNewClientForm(true)}>
+          <Plus className="h-4 w-4" />
+          New Client
+        </Button>
+      </PageHeader>
 
       {/* Flash message */}
       {flash && (
-        <div
-          className={`mb-5 px-4 py-3 rounded-lg text-sm font-medium border ${
-            flash.type === "success"
-              ? "bg-green-50 text-green-700 border-green-200"
-              : "bg-red-50 text-red-700 border-red-200"
-          }`}
-        >
-          {flash.message}
-        </div>
+        <FlashMessage
+          variant={flash.type}
+          message={flash.message}
+          className="mb-5"
+          onDismiss={() => setFlash(null)}
+        />
       )}
 
       {/* New Client Form Modal */}
-      {showNewClientForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">New Client</h3>
-            <form onSubmit={handleCreateClient} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Client Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newClient.name}
-                  onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-                  placeholder="e.g., Acme Corporation"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Client Identifier *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newClient.identifier}
-                  onChange={(e) => setNewClient({ ...newClient, identifier: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-                  placeholder="e.g., ACM001"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Domain (optional)
-                </label>
-                <input
-                  type="text"
-                  value={newClient.emailDomain}
-                  onChange={(e) => setNewClient({ ...newClient, emailDomain: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-                  placeholder="e.g., acme.com or john@acme.com"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Enter a domain (acme.com) to match all emails from that domain, or a specific email (john@acme.com) to match only that address.
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNewClientForm(false);
-                    setNewClient({ name: "", identifier: "", emailDomain: "" });
-                  }}
-                  className="flex-1 py-2 px-4 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 px-4 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Create Client
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showNewClientForm}
+        onClose={() => {
+          setShowNewClientForm(false);
+          setNewClient({ name: "", identifier: "", emailDomain: "" });
+        }}
+      >
+        <ModalHeader
+          onClose={() => {
+            setShowNewClientForm(false);
+            setNewClient({ name: "", identifier: "", emailDomain: "" });
+          }}
+        >
+          New Client
+        </ModalHeader>
+        <form onSubmit={handleCreateClient}>
+          <ModalBody className="space-y-4">
+            <Input
+              label="Client Name *"
+              type="text"
+              required
+              value={newClient.name}
+              onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+              placeholder="e.g., Acme Corporation"
+            />
+            <Input
+              label="Client Identifier *"
+              type="text"
+              required
+              value={newClient.identifier}
+              onChange={(e) => setNewClient({ ...newClient, identifier: e.target.value })}
+              placeholder="e.g., ACM001"
+            />
+            <Input
+              label="Email Domain (optional)"
+              type="text"
+              value={newClient.emailDomain}
+              onChange={(e) =>
+                setNewClient({ ...newClient, emailDomain: e.target.value })
+              }
+              placeholder="e.g., acme.com or john@acme.com"
+              hint="Enter a domain (acme.com) to match all emails from that domain, or a specific email (john@acme.com) to match only that address."
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowNewClientForm(false);
+                setNewClient({ name: "", identifier: "", emailDomain: "" });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">Create Client</Button>
+          </ModalFooter>
+        </form>
+      </Modal>
 
       {/* Clients List */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <Card className="overflow-hidden">
         {isLoading ? (
-          <div className="px-6 py-12 text-center text-gray-400 text-sm">
+          <div className="px-6 py-12 flex flex-col items-center justify-center gap-2 text-muted text-sm">
+            <Spinner size="md" />
             Loading clients...
           </div>
         ) : clients.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">👥</span>
-            </div>
-            <p className="text-gray-500 text-sm mb-4">
-              No clients yet. Create your first client to start organizing documents and communications.
-            </p>
-            <button
-              onClick={() => setShowNewClientForm(true)}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Create First Client
-            </button>
-          </div>
+          <EmptyState
+            icon={<Users className="h-6 w-6" />}
+            title="No clients yet"
+            description="Create your first client to start organizing documents and communications."
+            action={
+              <Button onClick={() => setShowNewClientForm(true)}>
+                <Plus className="h-4 w-4" />
+                Create First Client
+              </Button>
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr className="text-left text-xs text-gray-500 uppercase tracking-wide">
+              <thead className="bg-surface-tertiary">
+                <tr className="text-left text-xs text-muted uppercase tracking-wide">
                   <th className="px-6 py-3 font-medium">Client</th>
                   <th className="px-6 py-3 font-medium">Identifier</th>
                   <th className="px-6 py-3 font-medium">Email Domain</th>
@@ -213,13 +204,16 @@ export default function ClientsPage() {
                   <th className="px-6 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-light">
                 {clients.map((client) => (
-                  <tr key={client.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={client.id}
+                    className="hover:bg-surface-tertiary/50 transition-colors"
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
-                          <span className="text-blue-600 font-semibold text-sm">
+                        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center shrink-0">
+                          <span className="text-primary-600 font-semibold text-sm">
                             {client.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
@@ -228,21 +222,22 @@ export default function ClientsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 font-mono">
+                    <td className="px-6 py-4 text-sm text-muted-foreground font-mono">
                       {client.identifier}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
                       {client.emailDomain || "—"}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {formatDate(client.createdAt)}
+                    <td className="px-6 py-4 text-sm text-muted">
+                      {fmtDate(client.createdAt)}
                     </td>
                     <td className="px-6 py-4">
                       <Link
                         href={`/clients/${client.id}`}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 text-sm font-medium"
                       >
-                        View Summary →
+                        View Summary
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </td>
                   </tr>
@@ -251,10 +246,10 @@ export default function ClientsPage() {
             </table>
           </div>
         )}
-      </div>
+      </Card>
 
       {clients.length > 0 && (
-        <div className="mt-6 text-center text-sm text-gray-500">
+        <div className="mt-6 text-center text-sm text-muted">
           {clients.length} client{clients.length === 1 ? "" : "s"} total
         </div>
       )}

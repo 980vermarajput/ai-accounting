@@ -2,33 +2,30 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export default function SignInPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-gray-50">
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-surface-secondary">
       <div className="w-full max-w-sm space-y-8">
         {/* Brand */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-primary-600 text-white text-sm font-bold flex items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-gray-900 text-white text-sm font-bold flex items-center justify-center shadow-card">
             CA
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              AI for Accountants
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Search documents, emails &amp; spreadsheets — get citation-backed
-              answers.
+            <h1 className="text-2xl font-bold text-gray-900">AI for Accountants</h1>
+            <p className="mt-1 text-sm text-muted">
+              Search documents, emails &amp; spreadsheets — get citation-backed answers.
             </p>
           </div>
         </div>
 
         {/* Sign-in card */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
-          <p className="text-sm text-gray-600 text-center font-medium">
+        <div className="bg-surface rounded-2xl border border-border shadow-card p-6 space-y-4">
+          <p className="text-sm text-muted-foreground text-center font-medium">
             Sign in with your Google Workspace account
           </p>
 
           <a
             href={`${API_BASE}/api/auth/google`}
-            className="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors shadow-sm"
+            className="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-lg border border-border bg-surface text-sm font-medium text-gray-700 hover:bg-surface-tertiary active:bg-surface-secondary transition-colors shadow-sm"
           >
             {/* Google logo */}
             <svg
@@ -58,14 +55,14 @@ export default function SignInPage() {
             Continue with Google
           </a>
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             Only Google Workspace accounts for your CA firm are supported.
           </p>
         </div>
 
-        <p className="text-center text-xs text-gray-400">
-          Your data is encrypted and isolated to your firm under Indian data
-          residency standards.
+        <p className="text-center text-xs text-muted-foreground">
+          Your data is encrypted and isolated to your firm under Indian data residency
+          standards.
         </p>
       </div>
     </main>

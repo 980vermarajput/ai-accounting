@@ -8,14 +8,10 @@ export const metadata: Metadata = {
     "A secure AI assistant for Indian chartered accountants — search emails, documents, and get instant answers.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 antialiased">
+      <body className="min-h-screen bg-surface-secondary antialiased">
         <UserProvider>{children}</UserProvider>
       </body>
     </html>

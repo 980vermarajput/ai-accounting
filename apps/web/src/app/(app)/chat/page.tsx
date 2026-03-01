@@ -10,6 +10,22 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiFetch } from "../../../lib/api";
+import { cn, fmtDate, fmtMs, uid } from "@/lib/utils";
+import { Badge } from "@/components/ui";
+import { Spinner } from "@/components/ui";
+import {
+  Send,
+  Copy,
+  Check,
+  ChevronRight,
+  RefreshCw,
+  Upload,
+  Zap,
+  FileText,
+  MessageSquarePlus,
+  User,
+  Smartphone,
+} from "lucide-react";
 import type {
   ApiResponse,
   ChatResponse,
@@ -54,44 +70,23 @@ type ErrorMsg = {
 
 type Message = UserMsg | AssistantMsg | ErrorMsg;
 
-// ─── Helpers ─────────────────────────────────────────────────────
-
-function uid() {
-  return typeof crypto !== "undefined"
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-  });
-}
-
-function fmtMs(ms: number) {
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
 // ─── Source card ─────────────────────────────────────────────────
 
 function SourceCard({ source }: { source: ChatSource }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-1.5 text-xs">
+    <div className="rounded-lg border border-border bg-white p-3 space-y-1.5 text-xs hover:shadow-card transition-shadow">
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium text-gray-800 truncate leading-tight">
           {source.filename}
         </span>
-        <span className="text-gray-400 shrink-0 whitespace-nowrap">
+        <span className="text-muted-foreground shrink-0 whitespace-nowrap">
           {fmtDate(source.sourceDate)}
         </span>
       </div>
-      <p className="text-gray-500 line-clamp-2 leading-relaxed">
-        {source.excerpt}
-      </p>
-      <span className="inline-block px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 font-medium">
+      <p className="text-muted line-clamp-2 leading-relaxed">{source.excerpt}</p>
+      <Badge variant="primary" className="text-[10px]">
         {Math.round(source.relevanceScore * 100)}% match
-      </span>
+      </Badge>
     </div>
   );
 }
@@ -113,29 +108,17 @@ function formatForWhatsApp(content: string, sources: ChatSource[]): string {
 
 const CONFIDENCE_STYLES = {
   high: {
-    emoji: "🟢",
-    bg: "bg-green-50",
-    text: "text-green-700",
-    border: "border-green-200",
+    variant: "success" as const,
+    label: "High Confidence",
   },
   medium: {
-    emoji: "🟡",
-    bg: "bg-yellow-50",
-    text: "text-yellow-700",
-    border: "border-yellow-200",
+    variant: "warning" as const,
+    label: "Medium Confidence",
   },
   low: {
-    emoji: "🔴",
-    bg: "bg-red-50",
-    text: "text-red-700",
-    border: "border-red-200",
+    variant: "danger" as const,
+    label: "Low Confidence",
   },
-} as const;
-
-const CONFIDENCE_LABELS = {
-  high: "High Confidence — Based on closely matching documents",
-  medium: "Medium Confidence — Based on partially matching records",
-  low: "Low Confidence — Limited supporting documents",
 } as const;
 
 // ─── Message bubble ──────────────────────────────────────────────
@@ -154,7 +137,7 @@ function MessageBubble({
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary-600 text-white px-4 py-3 text-sm leading-relaxed">
+        <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-gray-900 text-white px-4 py-3 text-sm leading-relaxed">
           {message.content}
         </div>
       </div>
@@ -177,7 +160,6 @@ function MessageBubble({
   // Assistant message
   const hasSources = message.sources.length > 0;
   const conf = CONFIDENCE_STYLES[message.confidence.level];
-  const confLabel = CONFIDENCE_LABELS[message.confidence.level];
   const [copied, setCopied] = useState(false);
 
   const handleWhatsAppCopy = () => {
@@ -191,76 +173,73 @@ function MessageBubble({
   return (
     <div className="flex gap-3">
       {/* Avatar */}
-      <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+      <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
         AI
       </div>
 
-      <div className="flex-1 space-y-3 min-w-0">
-        {/* Confidence badge */}
+      <div className="flex-1 space-y-2.5 min-w-0">
+        {/* Confidence & meta row */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${conf.bg} ${conf.text} ${conf.border}`}
-          >
-            {conf.emoji} {confLabel}
-          </span>
+          <Badge variant={conf.variant}>{conf.label}</Badge>
           {message.cached && (
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700">
-              ⚡ Cached
-            </span>
+            <Badge variant="info">
+              <Zap className="h-3 w-3" /> Cached
+            </Badge>
           )}
           {message.chunksRetrieved > 0 && (
-            <span className="text-xs text-gray-400">
-              📄 Searched {message.chunksRetrieved} chunks · used{" "}
-              {message.chunksUsed}
+            <span className="text-[11px] text-muted-foreground">
+              <FileText className="inline h-3 w-3 mr-0.5" />
+              {message.chunksRetrieved} searched · {message.chunksUsed} used
             </span>
           )}
         </div>
 
         {/* Answer */}
-        <div className="rounded-2xl rounded-tl-sm bg-white border border-gray-200 px-4 py-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+        <div className="rounded-xl rounded-tl-sm bg-white border border-border px-4 py-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap shadow-card">
           {message.content}
         </div>
 
         {/* No-results guidance */}
         {!hasSources && message.confidence.level === "low" && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm space-y-2">
-            <p className="font-medium text-amber-800">
-              ⚠️ No supporting documents found
-            </p>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm space-y-2">
+            <p className="font-medium text-amber-800">No supporting documents found</p>
             <p className="text-amber-700 text-xs leading-relaxed">
-              The answer above is based on general knowledge, not your firm's
-              data. This may happen when:
+              The answer is based on general knowledge, not your firm's data. Try syncing
+              more documents or rephrasing your question.
             </p>
-            <ul className="text-xs text-amber-700 list-disc list-inside space-y-0.5">
-              <li>Relevant emails or files haven't been synced yet</li>
-              <li>The query uses different terminology than your documents</li>
-              <li>The topic isn't covered in uploaded documents</li>
-            </ul>
             <div className="flex flex-wrap gap-2 pt-1">
               <a
                 href="/sync"
-                className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
               >
-                🔄 Sync Gmail / Drive
+                <RefreshCw className="h-3 w-3" /> Sync Gmail / Drive
               </a>
               <a
                 href="/documents"
-                className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
               >
-                📤 Upload documents
+                <Upload className="h-3 w-3" /> Upload documents
               </a>
             </div>
           </div>
         )}
 
         {/* Action buttons row */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleWhatsAppCopy}
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border bg-white text-muted hover:bg-surface-tertiary hover:text-gray-700 transition-colors"
             title="Copy formatted for WhatsApp"
           >
-            {copied ? <>✅ Copied!</> : <>📱 Copy </>}
+            {copied ? (
+              <>
+                <Check className="h-3 w-3 text-emerald-600" /> Copied!
+              </>
+            ) : (
+              <>
+                <Smartphone className="h-3 w-3" /> Copy
+              </>
+            )}
           </button>
         </div>
 
@@ -269,13 +248,11 @@ function MessageBubble({
           <div className="space-y-2">
             <button
               onClick={() => setShowSources((v) => !v)}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted hover:text-gray-700 transition-colors"
             >
-              <span
-                className={`transition-transform ${showSources ? "rotate-90" : ""}`}
-              >
-                ▶
-              </span>
+              <ChevronRight
+                className={cn("h-3 w-3 transition-transform", showSources && "rotate-90")}
+              />
               {showSources ? "Hide" : "Show"} {message.sources.length} source
               {message.sources.length > 1 ? "s" : ""}
             </button>
@@ -297,7 +274,7 @@ function MessageBubble({
               <button
                 key={q}
                 onClick={() => onFollowup(q)}
-                className="text-xs px-3 py-1.5 rounded-full border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors text-left"
+                className="text-xs px-3 py-1.5 rounded-full border border-border bg-white text-gray-600 hover:bg-primary-50 hover:border-primary-200 hover:text-primary-700 transition-colors text-left"
               >
                 {q}
               </button>
@@ -306,7 +283,7 @@ function MessageBubble({
         )}
 
         {/* Latency */}
-        <p className="text-xs text-gray-400">{fmtMs(message.latencyMs)}</p>
+        <p className="text-[11px] text-muted-foreground">{fmtMs(message.latencyMs)}</p>
       </div>
     </div>
   );
@@ -317,15 +294,15 @@ function MessageBubble({
 function ThinkingIndicator() {
   return (
     <div className="flex gap-3">
-      <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center shrink-0">
+      <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 text-[10px] font-bold flex items-center justify-center shrink-0">
         AI
       </div>
-      <div className="rounded-2xl rounded-tl-sm bg-white border border-gray-200 px-4 py-3">
+      <div className="rounded-xl rounded-tl-sm bg-white border border-border px-4 py-3 shadow-card">
         <div className="flex items-center gap-1.5">
           {[0, 150, 300].map((delay) => (
             <span
               key={delay}
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
               style={{ animationDelay: `${delay}ms` }}
             />
           ))}
@@ -346,7 +323,10 @@ export default function ChatPage() {
   const [isAsking, setIsAsking] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [clientInfo, setClientInfo] = useState<{ name: string; emailDomain?: string } | null>(null);
+  const [clientInfo, setClientInfo] = useState<{
+    name: string;
+    emailDomain?: string;
+  } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -376,13 +356,13 @@ export default function ChatPage() {
       if (!clientId) return;
 
       try {
-        const res = await apiFetch<ApiResponse<{ client: { name: string; emailDomain?: string } }>>(
-          `/api/clients/${clientId}/summary`
-        );
+        const res = await apiFetch<
+          ApiResponse<{ client: { name: string; emailDomain?: string } }>
+        >(`/api/clients/${clientId}/summary`);
         if (res.success && res.data) {
           setClientInfo({
             name: res.data.client.name,
-            emailDomain: res.data.client.emailDomain
+            emailDomain: res.data.client.emailDomain,
           });
         }
       } catch {
@@ -419,7 +399,7 @@ export default function ChatPage() {
           body: JSON.stringify({
             query: q,
             ...(sessionId && { sessionId }),
-            ...(clientId && { clientId })
+            ...(clientId && { clientId }),
           }),
         });
 
@@ -498,20 +478,20 @@ export default function ChatPage() {
   return (
     <div className="flex h-full">
       {/* ── History sidebar ─────────────────────────────────── */}
-      <aside className="w-60 shrink-0 border-r border-gray-200 bg-white flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+      <aside className="w-60 shrink-0 border-r border-border bg-white flex flex-col overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-light">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Recent queries
           </h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto py-1 custom-scrollbar">
           {historyLoading ? (
             <div className="flex items-center justify-center py-8">
-              <span className="inline-block w-4 h-4 border-2 border-gray-200 border-t-primary-500 rounded-full animate-spin" />
+              <Spinner size="sm" />
             </div>
           ) : history.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-8 px-4">
+            <p className="text-xs text-muted-foreground text-center py-8 px-4">
               No queries yet. Ask something below!
             </p>
           ) : (
@@ -519,12 +499,12 @@ export default function ChatPage() {
               <button
                 key={item.id}
                 onClick={() => setInput(item.queryText)}
-                className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors group"
+                className="w-full text-left px-4 py-2.5 hover:bg-surface-tertiary transition-colors group"
               >
-                <p className="text-xs text-gray-700 leading-snug line-clamp-2 group-hover:text-gray-900">
+                <p className="text-xs text-gray-600 leading-snug line-clamp-2 group-hover:text-gray-900">
                   {item.queryText}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-[11px] text-muted-foreground mt-0.5">
                   {fmtDate(item.createdAt)}
                 </p>
               </button>
@@ -532,12 +512,16 @@ export default function ChatPage() {
           )}
         </div>
 
-        <div className="border-t border-gray-200 px-4 py-3">
+        <div className="border-t border-border-light px-4 py-3">
           <button
-            onClick={() => setMessages([])}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            onClick={() => {
+              setMessages([]);
+              setSessionId(null);
+            }}
+            className="flex items-center gap-1.5 text-xs text-muted hover:text-gray-700 transition-colors"
           >
-            + New conversation
+            <MessageSquarePlus className="h-3.5 w-3.5" />
+            New conversation
           </button>
         </div>
       </aside>
@@ -546,36 +530,38 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Client Context Banner */}
         {clientInfo && (
-          <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
+          <div className="bg-primary-50 border-b border-primary-100 px-6 py-2.5">
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-blue-600">👤</span>
-              <span className="text-blue-800 font-medium">
+              <User className="h-3.5 w-3.5 text-primary-600" />
+              <span className="text-primary-800 font-medium">
                 Asking about: {clientInfo.name}
               </span>
               {clientInfo.emailDomain && (
-                <span className="text-blue-600">({clientInfo.emailDomain})</span>
+                <span className="text-primary-600 text-xs">
+                  ({clientInfo.emailDomain})
+                </span>
               )}
-              <span className="text-blue-600 text-xs ml-auto">
-                Questions will focus on documents from this client
+              <span className="text-primary-500 text-xs ml-auto">
+                Scoped to this client&apos;s documents
               </span>
             </div>
           </div>
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5 custom-scrollbar">
           {messages.length === 0 && !isAsking && (
             <div className="flex flex-col items-center justify-center h-full text-center py-16 space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-primary-100 text-primary-600 text-xl flex items-center justify-center">
-                💬
+              <div className="w-12 h-12 rounded-xl bg-surface-tertiary flex items-center justify-center">
+                <MessageSquarePlus className="h-6 w-6 text-muted" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-gray-700">
+                <h2 className="text-base font-semibold text-gray-800">
                   Ask about your documents
                 </h2>
-                <p className="text-sm text-gray-400 mt-1 max-w-sm">
-                  Search across all synced emails, invoices, ledgers, and
-                  spreadsheets. Get answers with source citations.
+                <p className="text-sm text-muted mt-1 max-w-sm">
+                  Search across synced emails, invoices, ledgers, and spreadsheets. Get
+                  answers with source citations.
                 </p>
               </div>
               {/* Compliance template chips */}
@@ -591,7 +577,7 @@ export default function ChatPage() {
                   <button
                     key={q}
                     onClick={() => void submit(q)}
-                    className="text-xs px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-primary-50 hover:border-primary-200 hover:text-primary-700 transition-colors"
+                    className="text-xs px-3 py-1.5 rounded-full border border-border bg-white text-gray-600 hover:bg-primary-50 hover:border-primary-200 hover:text-primary-700 transition-colors"
                   >
                     {q}
                   </button>
@@ -615,10 +601,10 @@ export default function ChatPage() {
         </div>
 
         {/* Input bar */}
-        <div className="border-t border-gray-200 bg-white px-6 py-4">
+        <div className="border-t border-border bg-white px-6 py-4">
           <form
             onSubmit={handleFormSubmit}
-            className="flex items-end gap-3 rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 focus-within:border-primary-400 focus-within:ring-1 focus-within:ring-primary-400 transition-all"
+            className="flex items-end gap-3 rounded-xl border border-border bg-surface-secondary px-4 py-3 focus-within:border-primary-400 focus-within:ring-2 focus-within:ring-primary-500/20 transition-all"
           >
             <textarea
               ref={textareaRef}
@@ -635,27 +621,15 @@ export default function ChatPage() {
             <button
               type="submit"
               disabled={!input.trim() || isAsking}
-              className="shrink-0 w-8 h-8 rounded-lg bg-primary-600 text-white flex items-center justify-center hover:bg-primary-700 active:bg-primary-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="shrink-0 w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center hover:bg-gray-800 active:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               aria-label="Send"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M22 2L11 13" />
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-              </svg>
+              <Send className="h-3.5 w-3.5" />
             </button>
           </form>
-          <p className="mt-2 text-xs text-gray-400 text-center">
-            Answers are grounded in your synced documents. Always verify with
-            source material.
+          <p className="mt-2 text-[11px] text-muted-foreground text-center">
+            Answers are grounded in your synced documents. Always verify with source
+            material.
           </p>
         </div>
       </div>

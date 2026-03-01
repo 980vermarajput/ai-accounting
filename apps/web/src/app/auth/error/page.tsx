@@ -3,6 +3,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui";
 
 const REASON_MESSAGES: Record<string, string> = {
   access_denied: "You denied access on the Google consent screen.",
@@ -18,19 +20,16 @@ function ErrorContent() {
 
   return (
     <div className="text-center space-y-6">
-      <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 text-2xl flex items-center justify-center mx-auto">
-        ✕
+      <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center mx-auto">
+        <AlertTriangle className="h-7 w-7" />
       </div>
       <div>
         <h1 className="text-xl font-bold text-gray-900">Sign in failed</h1>
-        <p className="mt-2 text-sm text-gray-500">{message}</p>
-        <p className="mt-1 text-xs text-gray-400">Error code: {reason}</p>
+        <p className="mt-2 text-sm text-muted">{message}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Error code: {reason}</p>
       </div>
-      <Link
-        href="/sign-in"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
-      >
-        Try again
+      <Link href="/sign-in">
+        <Button>Try again</Button>
       </Link>
     </div>
   );
@@ -38,11 +37,9 @@ function ErrorContent() {
 
 export default function AuthErrorPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="flex min-h-screen items-center justify-center p-8 bg-surface-secondary">
       <Suspense
-        fallback={
-          <p className="text-sm text-gray-400">Loading error details…</p>
-        }
+        fallback={<p className="text-sm text-muted-foreground">Loading error details…</p>}
       >
         <ErrorContent />
       </Suspense>

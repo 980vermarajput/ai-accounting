@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "../contexts/user-context";
+import { Spinner } from "@/components/ui";
 
 /** Root page: redirect to /chat when signed in, /sign-in when not. */
 export default function Home() {
@@ -15,8 +16,8 @@ export default function Home() {
   }, [user, isLoading, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center">
-      <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-primary-600 rounded-full animate-spin" />
+    <div className="flex h-screen items-center justify-center bg-surface-secondary">
+      <Spinner size="md" />
     </div>
   );
 }

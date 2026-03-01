@@ -12,9 +12,12 @@
   },
   "dependencies": {
     "@ai-accounting/shared": "workspace:*",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.575.0",
     "next": "^14.2.0",
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^18.3.0",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
