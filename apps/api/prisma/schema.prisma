@@ -69,13 +69,14 @@ model Firm {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  users     User[]
-  clients   Client[]
-  documents Document[]
-  chunks    Chunk[]
-  queries   Query[]
-  auditLogs AuditLog[]
-  syncJobs  SyncJob[]
+  users        User[]
+  clients      Client[]
+  documents    Document[]
+  chunks       Chunk[]
+  queries      Query[]
+  auditLogs    AuditLog[]
+  syncJobs     SyncJob[]
+  chatSessions ChatSession[]
 
   @@map("firms")
 }
@@ -94,12 +95,13 @@ model User {
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
-  firm      Firm       @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  documents Document[]
-  queries   Query[]
-  auditLogs AuditLog[]
-  syncJobs  SyncJob[]
-  clients   Client[]
+  firm         Firm          @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  documents    Document[]
+  queries      Query[]
+  auditLogs    AuditLog[]
+  syncJobs     SyncJob[]
+  clients      Client[]
+  chatSessions ChatSession[]
 
   @@index([firmId])
   @@map("users")
@@ -117,11 +119,13 @@ model Client {
   metadata    Json?    @db.JsonB
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  firm      Firm       @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  creator   User       @relation(fields: [createdBy], references: [id])
-  documents Document[]
-  chunks    Chunk[]
-  queries   Query[]
+  firm         Firm          @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  creator      User          @relation(fields: [createdBy], references: [id])
+  documents    Document[]
+  chunks       Chunk[]
+  queries      Query[]
+  chatSessions ChatSession[]
+  chatMessages ChatMessage[]
 
   @@index([firmId])
   @@map("clients")
@@ -259,4 +263,56 @@ model SyncJob {
   @@index([firmId])
   @@index([firmId, userId])
   @@map("sync_jobs")
+}
+
+// ─── Chat Sessions & Messages ─────────────────────────
+
+model ChatSession {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId       String        @map("firm_id") @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  clientId     String?       @map("client_id") @db.Uuid // Optional client context
+  title        String?       @db.VarChar(200) // Auto-generated from first message
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastActivity DateTime      @default(now()) @map("last_activity") @db.Timestamptz(6)
+  expiresAt    DateTime      @map("expires_at") @db.Timestamptz(6) // Auto-cleanup
+  isActive     Boolean       @default(true) @map("is_active")
+
+  // Relationships
+  firm     Firm          @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client   Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  messages ChatMessage[]
+
+  @@index([firmId, userId])
+  @@index([lastActivity]) // For cleanup queries
+  @@index([expiresAt]) // For cleanup queries
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId    String      @map("session_id") @db.Uuid
+  role         MessageRole
+  content      String      @db.Text
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Metadata for smart context management
+  tokensUsed   Int?        @map("tokens_used") // Track token cost per message
+  clientId     String?     @map("client_id") @db.Uuid // Track client context
+  searchResults Int?       @map("search_results") // Number of doc chunks used
+  toolsUsed    String[]    @default([]) @map("tools_used") // Track which AI tools were called
+
+  // Relationships
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  client  Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, createdAt]) // For conversation ordering
+  @@map("chat_messages")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system // For context/tool outputs
 }

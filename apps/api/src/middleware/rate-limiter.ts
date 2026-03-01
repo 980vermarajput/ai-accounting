@@ -12,9 +12,12 @@ import { ApiError } from "../lib/api-error";
  * Falls back to IP-based limiting for unauthenticated endpoints.
  */
 
-const USER_LIMIT = 60; // requests per window
-const FIRM_LIMIT = 500; // requests per window
-const WINDOW_SECONDS = 3600; // 1 hour
+const isDev = process.env.NODE_ENV === "development";
+
+// Development-friendly limits
+const USER_LIMIT = isDev ? 1000 : 60; // requests per window
+const FIRM_LIMIT = isDev ? 5000 : 500; // requests per window
+const WINDOW_SECONDS = isDev ? 600 : 3600; // 10 min in dev, 1 hour in prod
 
 /**
  * Increment the counter for a given key and check against the limit.
@@ -68,7 +71,7 @@ export function rateLimit(
 
 /**
  * Lightweight IP-based rate limiter for public endpoints (e.g. /api/auth/*).
- * 30 requests per minute per IP to prevent brute-force.
+ * 30 requests per minute per IP to prevent brute-force (300 in development).
  */
 export function rateLimitPublic(
   req: Request,
@@ -81,7 +84,9 @@ export function rateLimitPublic(
     "unknown";
   const key = `rl:ip:${ip}`;
 
-  checkLimit(key, 30)
+  const publicLimit = isDev ? 300 : 30;
+
+  checkLimit(key, publicLimit)
     .then(() => next())
     .catch(next);
 }

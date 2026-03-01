@@ -17,6 +17,7 @@
 import OpenAI from "openai";
 import { prisma } from "./prisma";
 import { embedChunks } from "./embedder";
+import { getFirmAnalytics, getClientDetails, findUnassignedDocumentsForClient } from "./firm-tools";
 import type { DocumentSource } from "@ai-accounting/shared";
 
 // ─── Constants ───────────────────────────────────────────────────
@@ -295,17 +296,129 @@ export async function generateRagAnswer(
   const systemPrompt = buildSystemPrompt(chunks.length > 0, firmSnapshot);
   const userMessage = buildUserMessage(query, chunks);
 
+  // Define function tools for firm analytics
+  const tools = [
+    {
+      type: "function" as const,
+      function: {
+        name: "get_firm_analytics",
+        description: "Get comprehensive firm statistics including client counts, document assignment status, unassigned documents, and overall firm metrics",
+        parameters: {
+          type: "object",
+          properties: {},
+          required: []
+        }
+      }
+    },
+    {
+      type: "function" as const,
+      function: {
+        name: "get_client_details",
+        description: "Get detailed information about a specific client including recent documents and activity",
+        parameters: {
+          type: "object",
+          properties: {
+            clientName: {
+              type: "string",
+              description: "Name of the client to get details for"
+            }
+          },
+          required: ["clientName"]
+        }
+      }
+    },
+    {
+      type: "function" as const,
+      function: {
+        name: "find_unassigned_documents",
+        description: "Find unassigned documents that might belong to a specific client based on email or domain",
+        parameters: {
+          type: "object",
+          properties: {
+            emailOrDomain: {
+              type: "string",
+              description: "Email address or domain to search for in unassigned documents"
+            }
+          },
+          required: ["emailOrDomain"]
+        }
+      }
+    }
+  ];
+
+  let messages: Array<any> = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userMessage },
+  ];
+
+  // First completion - may include tool calls
   const completion = await client.chat.completions.create({
     model: CHAT_MODEL,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage },
-    ],
-    temperature: 0.2, // low temperature for factual, grounded answers
+    messages,
+    tools,
+    tool_choice: "auto", // Let the model decide when to use tools
+    temperature: 0.2,
     max_tokens: 1024,
   });
 
+  const message = completion.choices[0]?.message;
+
+  // Handle tool calls if present
+  if (message?.tool_calls) {
+    messages.push(message); // Add the assistant's message with tool calls
+
+    // Process each tool call
+    for (const toolCall of message.tool_calls) {
+      try {
+        let toolResult: any = null;
+
+        if (toolCall.type === "function" && toolCall.function.name === "get_firm_analytics") {
+          toolResult = await getFirmAnalytics(firmId!);
+        } else if (toolCall.type === "function" && toolCall.function.name === "get_client_details") {
+          const args = JSON.parse(toolCall.function.arguments);
+          toolResult = await getClientDetails(firmId!, args.clientName);
+        } else if (toolCall.type === "function" && toolCall.function.name === "find_unassigned_documents") {
+          const args = JSON.parse(toolCall.function.arguments);
+          toolResult = await findUnassignedDocumentsForClient(firmId!, args.emailOrDomain);
+        }
+
+        // Add tool result to messages
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult, null, 2)
+        });
+      } catch (error) {
+        // Add error message for failed tool call
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: "Failed to execute tool call" })
+        });
+      }
+    }
+
+    // Second completion with tool results
+    const finalCompletion = await client.chat.completions.create({
+      model: CHAT_MODEL,
+      response_format: { type: "json_object" },
+      messages,
+      temperature: 0.2,
+      max_tokens: 1024,
+    });
+
+    // Use the final completion for response parsing
+    const finalRawContent = finalCompletion.choices[0]?.message?.content ?? "{}";
+    const finalUsage = {
+      prompt_tokens: (completion.usage?.prompt_tokens || 0) + (finalCompletion.usage?.prompt_tokens || 0),
+      completion_tokens: (completion.usage?.completion_tokens || 0) + (finalCompletion.usage?.completion_tokens || 0),
+      total_tokens: (completion.usage?.total_tokens || 0) + (finalCompletion.usage?.total_tokens || 0)
+    };
+
+    return parseCompletionResponse(finalRawContent, finalUsage);
+  }
+
+  // No tool calls, handle normal response
   const rawContent = completion.choices[0]?.message?.content ?? "{}";
   const usage = completion.usage ?? {
     prompt_tokens: 0,
@@ -313,36 +426,7 @@ export async function generateRagAnswer(
     total_tokens: 0,
   };
 
-  // Parse JSON response; fall back gracefully on malformed output
-  let parsed: LlmJsonResponse;
-  try {
-    parsed = JSON.parse(rawContent) as LlmJsonResponse;
-    if (typeof parsed.answer !== "string") throw new Error("missing answer");
-  } catch {
-    // Treat the raw content as the answer if JSON parsing fails
-    parsed = {
-      answer: rawContent.trim() || "I was unable to generate a response.",
-      suggestedFollowups: [],
-    };
-  }
-
-  const suggestedFollowups = Array.isArray(parsed.suggestedFollowups)
-    ? parsed.suggestedFollowups.slice(0, 3).map(String)
-    : [];
-
-  const costInr =
-    ((usage.prompt_tokens / 1_000_000) * COST_INPUT_PER_M_USD +
-      (usage.completion_tokens / 1_000_000) * COST_OUTPUT_PER_M_USD) *
-    USD_TO_INR;
-
-  return {
-    answer: parsed.answer,
-    suggestedFollowups,
-    model: completion.model ?? CHAT_MODEL,
-    tokensPrompt: usage.prompt_tokens,
-    tokensCompletion: usage.completion_tokens,
-    costInr: Math.round(costInr * 10_000) / 10_000, // 4 decimal places
-  };
+  return parseCompletionResponse(rawContent, usage);
 }
 
 // ─── Prompt builders ─────────────────────────────────────────────
@@ -394,6 +478,45 @@ No documents found: No relevant documents were found for this query.
 - Suggest what types of documents (e.g., invoices, ledgers, bank statements, correspondence) might contain the answer.
 - You may provide general guidance from Indian CA practice if appropriate.`
   );
+}
+
+/**
+ * Helper function to parse completion response and calculate costs
+ */
+function parseCompletionResponse(
+  rawContent: string,
+  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+) {
+  // Parse JSON response; fall back gracefully on malformed output
+  let parsed: LlmJsonResponse;
+  try {
+    parsed = JSON.parse(rawContent) as LlmJsonResponse;
+    if (typeof parsed.answer !== "string") throw new Error("missing answer");
+  } catch {
+    // Treat the raw content as the answer if JSON parsing fails
+    parsed = {
+      answer: rawContent.trim() || "I was unable to generate a response.",
+      suggestedFollowups: [],
+    };
+  }
+
+  const suggestedFollowups = Array.isArray(parsed.suggestedFollowups)
+    ? parsed.suggestedFollowups.slice(0, 3).map(String)
+    : [];
+
+  const costInr =
+    ((usage.prompt_tokens / 1_000_000) * COST_INPUT_PER_M_USD +
+      (usage.completion_tokens / 1_000_000) * COST_OUTPUT_PER_M_USD) *
+    USD_TO_INR;
+
+  return {
+    answer: parsed.answer,
+    suggestedFollowups,
+    model: CHAT_MODEL,
+    tokensPrompt: usage.prompt_tokens,
+    tokensCompletion: usage.completion_tokens,
+    costInr: Math.round(costInr * 10_000) / 10_000, // 4 decimal places
+  };
 }
 
 function buildUserMessage(query: string, chunks: SearchResult[]): string {

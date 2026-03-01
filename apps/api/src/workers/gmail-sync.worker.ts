@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma";
 import { decrypt } from "../lib/auth";
 import { addExtractionJob } from "../queues/extraction.queue";
 import type { SyncJobData } from "../queues/sync.queue";
+import { extractAllEmails, findMatchingClientId } from "../lib/email-utils";
 
 // ─── Processor ───────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
         userId: "me",
         id: msgRef.id,
         format: "metadata",
-        metadataHeaders: ["Subject", "Date"],
+        metadataHeaders: ["Subject", "Date", "From", "To", "Cc", "Bcc"],
       });
 
       const headers = msgRes.data.payload?.headers ?? [];
@@ -132,6 +133,25 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
       const dateHeader = headers.find((h) => h.name === "Date")?.value;
       const sourceDate = dateHeader ? new Date(dateHeader) : new Date();
       const snippet = msgRes.data.snippet ?? "";
+
+      // Extract all email addresses from message headers
+      const allEmails = extractAllEmails(headers);
+
+      // Find matching client based on email addresses
+      let clientId: string | null = null;
+
+      if (allEmails.length > 0) {
+        // Get all clients for this firm that have email domains
+        const clients = await prisma.client.findMany({
+          where: {
+            firmId,
+            emailDomain: { not: null }
+          },
+          select: { id: true, emailDomain: true }
+        });
+
+        clientId = findMatchingClientId(allEmails, clients);
+      }
 
       // Placeholder textHash — SHA-256 of the sourceId.
       // Will be updated to SHA-256 of actual extracted text in the chunking phase.
@@ -144,6 +164,7 @@ async function processGmailSync(job: Job<SyncJobData>): Promise<void> {
         data: {
           firmId,
           userId,
+          clientId,
           source: "gmail",
           sourceId: msgRef.id,
           gmailThreadId: msgRef.threadId ?? null,

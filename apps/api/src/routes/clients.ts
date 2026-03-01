@@ -219,3 +219,80 @@ clientsRouter.get(
     }
   },
 );
+
+// ─── POST /api/clients/:id/resync — reassign documents for a specific client ─
+clientsRouter.post(
+  "/:id/resync",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { firmId } = req.user!;
+      const clientId = String(req.params.id);
+
+      // 1. Load the client
+      const client = await prisma.client.findFirst({
+        where: { id: clientId, firmId },
+        select: { id: true, name: true, emailDomain: true }
+      });
+      if (!client) throw ApiError.notFound("Client not found");
+
+      if (!client.emailDomain) {
+        const response: ApiResponse = {
+          success: false,
+          error: {
+            code: "NO_EMAIL_DOMAIN",
+            message: "Client has no email domain configured for document matching"
+          }
+        };
+        return res.status(400).json(response);
+      }
+
+      // 2. Reassign documents for this client
+      let assignedCount = 0;
+      const emailDomain = client.emailDomain.toLowerCase();
+
+      if (emailDomain.includes('@')) {
+        // It's a specific email address - match in filename or text excerpt
+        const updateResult = await prisma.document.updateMany({
+          where: {
+            firmId,
+            clientId: null,
+            OR: [
+              { filename: { contains: emailDomain, mode: "insensitive" } },
+              { textExcerpt: { contains: emailDomain, mode: "insensitive" } },
+            ]
+          },
+          data: { clientId: client.id }
+        });
+        assignedCount = updateResult.count;
+      } else {
+        // It's a domain - match emails from that domain
+        const domainPattern = `@${emailDomain.replace(/^@/, '')}`;
+        const updateResult = await prisma.document.updateMany({
+          where: {
+            firmId,
+            clientId: null,
+            OR: [
+              { filename: { contains: domainPattern, mode: "insensitive" } },
+              { textExcerpt: { contains: domainPattern, mode: "insensitive" } },
+            ]
+          },
+          data: { clientId: client.id }
+        });
+        assignedCount = updateResult.count;
+      }
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          message: `Successfully assigned ${assignedCount} documents to ${client.name}`,
+          client: client.name,
+          emailDomain: client.emailDomain,
+          assignedCount
+        }
+      };
+      res.json(response);
+    } catch (err) {
+      next(err);
+    }
+  },
+);

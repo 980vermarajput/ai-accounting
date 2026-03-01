@@ -24,6 +24,11 @@ import {
   recordTokenUsage,
   estimateTokens,
 } from "../lib/token-usage";
+import {
+  getOrCreateSession,
+  saveMessages,
+  getConversationContext,
+} from "../lib/chat-context";
 import { logger } from "../lib/logger";
 import crypto from "crypto";
 import { getRedis } from "../lib/redis";
@@ -43,6 +48,22 @@ chatRouter.post(
       const body = req.body as ChatRequest;
       const { userId, firmId } = req.user!;
       const totalStart = Date.now();
+
+      // ── Session Management ────────────────────────────────
+      const session = await getOrCreateSession(
+        body.sessionId,
+        userId,
+        firmId,
+        body.clientId
+      );
+
+      // Get conversation context for AI
+      const context = await getConversationContext(session.id);
+
+      // Build enhanced query with conversation context
+      const enhancedQuery = context.contextString
+        ? `${context.contextString}Current question: ${body.query}`
+        : body.query;
 
       // ── Cache check ──────────────────────────────────────
       const normalizedQuery = body.query
@@ -87,10 +108,18 @@ chatRouter.post(
             },
           });
 
+          // Save cached conversation to session
+          await saveMessages(session.id, body.query, cachedData.answer, {
+            clientId: body.clientId,
+            tokensUsed: 0, // Cached responses don't use tokens
+            searchResults: 0
+          });
+
           const response: ApiResponse<ChatResponse> = {
             success: true,
             data: {
               queryId: queryRecord.id,
+              sessionId: session.id,
               ...cachedData,
               metadata: {
                 ...cachedData.metadata,
@@ -126,7 +155,7 @@ chatRouter.post(
 
       // 4. LLM generation grounded in retrieved chunks
       const ragAnswer = await generateRagAnswer(
-        body.query,
+        enhancedQuery, // Use enhanced query with conversation context
         searchResults,
         firmId,
       );
@@ -176,9 +205,18 @@ chatRouter.post(
         },
       });
 
-      // 9. Build response
+      // 9. Save conversation to session
+      await saveMessages(session.id, body.query, ragAnswer.answer, {
+        clientId: body.clientId,
+        tokensUsed: ragAnswer.tokensPrompt + ragAnswer.tokensCompletion,
+        searchResults: searchResults.length,
+        toolsUsed: [] // TODO: Add tool tracking from generateRagAnswer
+      });
+
+      // 10. Build response
       const responseData: ChatResponse = {
         queryId: queryRecord.id,
+        sessionId: session.id,
         answer: ragAnswer.answer,
         sources,
         suggestedFollowups: ragAnswer.suggestedFollowups,

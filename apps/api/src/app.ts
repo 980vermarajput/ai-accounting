@@ -11,6 +11,7 @@ import { syncRouter } from "./routes/sync";
 import { draftsRouter } from "./routes/drafts";
 import { errorHandler } from "./middleware/error-handler";
 import { clientsRouter } from "./routes/clients";
+import { adminRouter } from "./routes/admin";
 
 const app: Express = express();
 
@@ -56,6 +57,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/sync", syncRouter);
 app.use("/api/drafts", draftsRouter);
 app.use("/api/clients", clientsRouter);
+app.use("/api/admin", adminRouter);
 
 // ─── 404 catch-all ───────────────────────────────────
 app.use((_req, res) => {
