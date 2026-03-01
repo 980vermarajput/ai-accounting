@@ -1,8 +1,8 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.2 — Updated 2026-03-01
+> **Version:** 2.3 — Updated 2026-03-01
 > **Author:** @980vermarajput
-> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools
+> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre
 > **Related:** [PRD v2.1](./PRD.md)
 
 ---
@@ -169,6 +169,11 @@
 │  │  │ Document │ │ Chunk    │ │ Embedding│ │ Audit    │  │  │
 │  │  │ Service  │ │ Service  │ │ Service  │ │ Service  │  │  │
 │  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │  │
+│  │                                                         │  │
+│  │  ┌──────────┐ ┌──────────┐                            │  │
+│  │  │ Alert    │ │ Briefing │                            │  │
+│  │  │ Detector │ │ Generator│                            │  │
+│  │  └──────────┘ └──────────┘                            │  │
 │  └─────────────────────────────────────────────────────────┘  │
 │                                │                              │
 │  ┌─────────────────────────────▼──────────────────────────┐  │
@@ -417,26 +422,28 @@ User       Frontend        API Server      PostgreSQL/pgvector    Redis Cache   
 
 ### 7.1 Schema Overview
 
-Our Prisma schema defines 10 core models with pgvector support and RLS:
+Our Prisma schema defines 12 core models with pgvector support and RLS:
 
-| Model           | Purpose                                  | RLS Key | Relationships                                                      |
-| --------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------ |
-| **Firm**        | Organization/tenant root                 | firm_id | 1→many Users, Clients, ChatSessions                                |
-| **User**        | Team members (admins, staff)             | firm_id | many←one Firm; 1→many SyncJobs                                     |
-| **Client**      | Taxpayer/business entity                 | firm_id | many←one Firm; 1→many Documents                                    |
-| **Document**    | Uploaded files (Gmail, Drive, manual)    | firm_id | many←one Firm, Client; 1→many Chunks                               |
-| **Chunk**       | Text segments with embeddings            | firm_id | many←one Document; has vector(1536)                                |
-| **Query**       | RAG chat queries + feedback              | firm_id | many←one User; has clientId foreign key                            |
-| **SyncJob**     | Background sync status tracker           | firm_id | many←one User; tracks Gmail/Drive jobs; supports keyword filtering |
-| **AuditLog**    | Compliance + access tracking             | firm_id | logs all data modifications                                        |
-| **ChatSession** | Conversation sessions (2hr expiry)       | firm_id | many←one Firm, User; 1→many ChatMessages; optional client context  |
-| **ChatMessage** | Individual messages (user/assistant/sys) | N/A     | many←one ChatSession; tracks tokens, tools used, search results    |
+| Model             | Purpose                                  | RLS Key | Relationships                                                      |
+| ----------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------ |
+| **Firm**          | Organization/tenant root                 | firm_id | 1→many Users, Clients, ChatSessions, Alerts, DailyBriefings        |
+| **User**          | Team members (admins, staff)             | firm_id | many←one Firm; 1→many SyncJobs                                     |
+| **Client**        | Taxpayer/business entity                 | firm_id | many←one Firm; 1→many Documents, Alerts                            |
+| **Document**      | Uploaded files (Gmail, Drive, manual)    | firm_id | many←one Firm, Client; 1→many Chunks                               |
+| **Chunk**         | Text segments with embeddings            | firm_id | many←one Document; has vector(1536)                                |
+| **Query**         | RAG chat queries + feedback              | firm_id | many←one User; has clientId foreign key                            |
+| **SyncJob**       | Background sync status tracker           | firm_id | many←one User; tracks Gmail/Drive jobs; supports keyword filtering |
+| **AuditLog**      | Compliance + access tracking             | firm_id | logs all data modifications                                        |
+| **ChatSession**   | Conversation sessions (2hr expiry)       | firm_id | many←one Firm, User; 1→many ChatMessages; optional client context  |
+| **ChatMessage**   | Individual messages (user/assistant/sys) | N/A     | many←one ChatSession; tracks tokens, tools used, search results    |
+| **Alert**         | Proactive notifications for firm         | firm_id | many←one Firm, Client; type + severity + read/resolve state        |
+| **DailyBriefing** | AI-generated daily firm summary          | firm_id | many←one Firm; @@unique([firmId, date]); JSON metadata             |
 
 **Key Features:**
 
 - **Multi-tenancy via firm_id partition key** on every table (ChatMessages inherit from ChatSession)
 - **pgvector integration** on Chunk.embedding (1536-dim, IVFFlat index for cosine similarity)
-- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback, MessageRole
+- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback, MessageRole, AlertType, Severity
 - **Cascade deletes** for data cleanup (Document → Chunks, ChatSession → ChatMessages)
 - **Timestamps** on every entity (createdAt, updatedAt)
 - **Automatic session expiry** via `expiresAt` column (2hr default, cleanup via admin endpoint)
@@ -582,16 +589,17 @@ costInr = (promptTokens × 0.15 + completionTokens × 0.6) / 1_000_000 × 83.5
 
 ### 9.1 Overview
 
-All heavy I/O work runs asynchronously via BullMQ workers backed by Redis. Four workers start on server boot in `apps/api/src/index.ts`.
+All heavy I/O work runs asynchronously via BullMQ workers backed by Redis. Five workers start on server boot in `apps/api/src/index.ts`.
 
 ### 9.2 Worker Inventory
 
-| Worker     | Queue        | File                           | Concurrency | Purpose                                             |
-| ---------- | ------------ | ------------------------------ | ----------- | --------------------------------------------------- |
-| Gmail Sync | `sync`       | `workers/gmail-sync.worker.ts` | 2           | Fetch emails via Gmail API, create Document records |
-| Drive Sync | `sync`       | `workers/drive-sync.worker.ts` | 2           | Fetch files via Drive API, create Document records  |
-| Extraction | `extraction` | `workers/extraction.worker.ts` | 3           | Download content, extract text, chunk, store        |
-| Embedding  | `embedding`  | `workers/embedding.worker.ts`  | 1           | Batch embed chunks via OpenAI, store vectors        |
+| Worker     | Queue             | File                           | Concurrency | Purpose                                             |
+| ---------- | ----------------- | ------------------------------ | ----------- | --------------------------------------------------- |
+| Gmail Sync | `sync`            | `workers/gmail-sync.worker.ts` | 2           | Fetch emails via Gmail API, create Document records |
+| Drive Sync | `sync`            | `workers/drive-sync.worker.ts` | 2           | Fetch files via Drive API, create Document records  |
+| Extraction | `extraction`      | `workers/extraction.worker.ts` | 3           | Download content, extract text, chunk, store        |
+| Embedding  | `embedding`       | `workers/embedding.worker.ts`  | 1           | Batch embed chunks via OpenAI, store vectors        |
+| Scheduler  | `daily-scheduler` | `workers/scheduler.worker.ts`  | 1           | Daily cron: alert detection + briefing generation   |
 
 ### 9.3 Job Pipeline
 
@@ -605,6 +613,12 @@ SyncJob created in DB + BullMQ job enqueued
 [Extraction Worker] → Downloads content → extractText() → chunkText() → chunk.createMany()
   ↓ (enqueues embedding job when document status = ready)
 [Embedding Worker] → embedChunks() → UPDATE chunks SET embedding via raw SQL
+
+[Daily Scheduler] → Cron 01:30 UTC (07:00 IST)
+  ↓
+[Alert Detection] → detectAlertsForAllFirms() → Alert records in DB
+  ↓
+[Briefing Generation] → generateDailyBriefing() per firm → DailyBriefing records + Redis cache
 ```
 
 ### 9.4 Job Configuration
@@ -629,7 +643,7 @@ SyncJob created in DB + BullMQ job enqueued
 
 ### 10.1 Route Organization
 
-All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **29 total endpoints** across 8 routers:
+All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **34 total endpoints** across 9 routers:
 
 #### **Auth Routes** (`/api/auth/*` — 4 endpoints)
 
@@ -677,6 +691,14 @@ All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envel
 
 - `POST /cleanup-sessions` — Remove expired chat sessions and orphaned messages (✅ Live)
 - `GET /firm-snapshot/:firmId` — Generate comprehensive firm knowledge snapshot for AI context (✅ Live)
+
+#### **Dashboard Routes** (`/api/dashboard/*` — 5 endpoints)
+
+- `GET /command-centre` — Full dashboard payload: briefing + alerts + clients needing attention + recent activity + token usage; 15-min Redis cache (✅ Live)
+- `GET /briefing` — Today's AI-generated daily briefing for the firm (✅ Live)
+- `GET /alerts` — Paginated alerts with severity and unreadOnly filters (✅ Live)
+- `PATCH /alerts/:id/read` — Mark alert as read with firm ownership validation (✅ Live)
+- `PATCH /alerts/:id/resolve` — Resolve alert with timestamp and ownership check (✅ Live)
 
 #### **Health Route** (`/api/health` — 1 endpoint)
 
@@ -781,23 +803,28 @@ src/app/
     error/page.tsx        ← Auth error display
   (app)/
     layout.tsx            ← Protected layout, auth guard, AppNav sidebar
+    dashboard/page.tsx    ← Proactive AI Command Centre
     chat/page.tsx         ← RAG chat interface
     documents/page.tsx    ← Documents dashboard
     sync/page.tsx         ← Sync control centre
     drafts/page.tsx       ← AI email drafting
+    clients/page.tsx      ← Client management
+    clients/[id]/page.tsx ← Client detail view
 ```
 
 ### 11.3 Key Components
 
-| Component      | File                           | Purpose                                                                                          |
-| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `AppNav`       | `components/app-nav.tsx`       | Fixed 224px sidebar: firm name, nav links (Chat/Docs/Sync/Drafts/Clients), user avatar, sign-out |
-| `UserProvider` | `contexts/user-context.tsx`    | Auth context: fetches `/api/auth/me`, provides `useUser()` hook                                  |
-| `apiFetch`     | `lib/api.ts`                   | Typed fetch wrapper with `credentials: 'include'` for HttpOnly cookie auth                       |
-| `ThreadViewer` | `components/thread-viewer.tsx` | Gmail conversation thread viewer with collapsible message cards                                  |
+| Component      | File                           | Purpose                                                                                                                   |
+| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `AppNav`       | `components/app-nav.tsx`       | Fixed 224px sidebar: firm name, nav links (Dashboard w/ alert badge/Chat/Docs/Sync/Drafts/Clients), user avatar, sign-out |
+| `UserProvider` | `contexts/user-context.tsx`    | Auth context: fetches `/api/auth/me`, provides `useUser()` hook                                                           |
+| `apiFetch`     | `lib/api.ts`                   | Typed fetch wrapper with `credentials: 'include'` for HttpOnly cookie auth                                                |
+| `ThreadViewer` | `components/thread-viewer.tsx` | Gmail conversation thread viewer with collapsible message cards                                                           |
 
 ### 11.4 Page Features
 
+- **Dashboard** (NEW): Proactive AI Command Centre with daily briefing card (GPT-4o-mini summary), active alerts feed (mark-read/resolve), clients needing attention (>30d silent), recent activity (7-day counts), token usage display, 5-minute auto-refresh
+- **Dashboard** (NEW): Proactive AI Command Centre with daily briefing card (GPT-4o-mini summary), active alerts feed (mark-read/resolve), clients needing attention (>30d silent), recent activity (7-day counts), token usage display, 5-minute auto-refresh
 - **Chat**: History sidebar (30 recent queries), message thread with user/assistant/error bubbles, expandable source citations, follow-up chips, auto-resizing textarea, starter suggestions, thinking indicator, **session state management** (automatic session ID tracking for conversation continuity across page reloads)
 - **Documents**: Sync Gmail/Drive buttons, active-sync banner with polling, filterable table (source + status), status badges, pagination, **client filter dropdown**, **re-sync button** for updating document-client assignments
 - **Sync**: Gmail + Drive action cards with **keyword filtering UI** (AND/OR logic selector, chip-based keyword input), ref-based `setTimeout` polling (not `setInterval`), animated running indicator, duration column, per-job Cancel
@@ -1043,3 +1070,22 @@ RDS Multi-AZ, S3 versioning, Redis persistence (AOF), audit log archival to S3 G
 - Must disable bypass in production build
 - Critical security risk if X-Dev-User accepted in prod
 - Developers must test full OAuth flow before deploying
+
+---
+
+### ADR-007: Proactive Alert Detection with Daily Scheduler
+
+**Decision:** BullMQ cron worker runs daily at 07:00 IST to detect alerts and generate AI briefings for all firms
+
+**Rationale:**
+
+- Proactive intelligence (alerts surfaced before user asks) is more valuable than reactive search
+- Daily cron is simple, reliable, and cost-effective (one GPT-4o-mini call per firm per day)
+- Redis cache (23hr TTL) + DB idempotency prevents duplicate generation
+- 24-hour deduplication on alerts prevents notification spam
+
+**Consequences:**
+
+- Alerts are at most 24 hours stale (acceptable for accounting context)
+- One BullMQ worker must run continuously (5th worker on server boot)
+- OpenAI costs scale linearly with firm count (~500 tokens per firm per day)

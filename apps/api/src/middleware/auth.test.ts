@@ -65,23 +65,19 @@ describe("requireAuth", () => {
     requireAuth(req, mockRes, next);
 
     // No Authorization header present either → should be called with 401 error
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 401 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
   });
 
-  it("dev bypass: ignored when NODE_ENV is production", () => {
+  it("dev bypass: rejected when NODE_ENV is production", () => {
     process.env.NODE_ENV = "production";
     const next = vi.fn() as unknown as NextFunction;
     const req = mockReq({ "x-dev-user": JSON.stringify(payload) });
 
     requireAuth(req, mockRes, next);
 
-    // X-Dev-User must be ignored; no Authorization header → 401
+    // X-Dev-User in production → explicit 403 Forbidden
     expect(req.user).toBeUndefined();
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 401 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 
   // ── Bearer JWT ──────────────────────────────────────────────────
@@ -110,9 +106,7 @@ describe("requireAuth", () => {
 
     requireAuth(req, mockRes, next);
 
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 401 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
   });
 
   it("returns 401 when Authorization header is not Bearer scheme", () => {
@@ -121,9 +115,7 @@ describe("requireAuth", () => {
 
     requireAuth(req, mockRes, next);
 
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 401 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
   });
 
   it("returns 401 for a syntactically invalid JWT", () => {
@@ -132,9 +124,7 @@ describe("requireAuth", () => {
 
     requireAuth(req, mockRes, next);
 
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 401 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
   });
 
   it("returns 401 for a JWT signed with a different secret", () => {
@@ -145,9 +135,7 @@ describe("requireAuth", () => {
 
     requireAuth(req, mockRes, next);
 
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 401 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
   });
 });
 
@@ -181,9 +169,7 @@ describe("requireAdmin", () => {
 
     requireAdmin(req, mockRes, next);
 
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 
   it("returns 403 when req.user is not set (requireAuth not applied)", () => {
@@ -192,8 +178,6 @@ describe("requireAdmin", () => {
 
     requireAdmin(req, mockRes, next);
 
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403 }),
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 });

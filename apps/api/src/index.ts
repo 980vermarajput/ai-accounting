@@ -5,6 +5,7 @@ import { startGmailSyncWorker } from "./workers/gmail-sync.worker";
 import { startDriveSyncWorker } from "./workers/drive-sync.worker";
 import { startExtractionWorker } from "./workers/extraction.worker";
 import { startEmbeddingWorker } from "./workers/embedding.worker";
+import { startSchedulerWorker } from "./workers/scheduler.worker";
 
 const PORT = process.env.PORT || 4000;
 
@@ -18,4 +19,5 @@ app.listen(PORT, () => {
   startDriveSyncWorker();
   startExtractionWorker();
   startEmbeddingWorker();
+  startSchedulerWorker();
 });

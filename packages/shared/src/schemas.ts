@@ -47,7 +47,7 @@ export const syncRequestSchema = z.object({
     .array(z.string())
     .max(20, "Maximum 20 keywords allowed")
     .optional()
-    .transform(val => val?.map(k => k.trim()).filter(k => k.length > 0) || [])
+    .transform((val) => val?.map((k) => k.trim()).filter((k) => k.length > 0) || [])
     .pipe(z.array(z.string().min(1).max(100))),
   includeAllKeywords: z.boolean().default(true),
 });
@@ -99,3 +99,79 @@ export const sendDraftSchema = z.object({
   threadId: z.string().optional(),
 });
 export type SendDraftInput = z.infer<typeof sendDraftSchema>;
+
+// ─── Dashboard / Alert Schemas ───────────────────────
+
+export const alertTypeSchema = z.enum([
+  "INVOICE_OVERDUE",
+  "CLIENT_SILENT",
+  "DEADLINE_DETECTED",
+  "HIGH_RISK_LANGUAGE",
+  "SYNC_FAILURE",
+  "TOKEN_CAP_WARNING",
+]);
+
+export const severitySchema = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
+
+export const alertListQuerySchema = z.object({
+  severity: severitySchema.optional(),
+  unreadOnly: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+export type AlertListQuery = z.infer<typeof alertListQuerySchema>;
+
+export const alertSchema = z.object({
+  id: z.string(),
+  firmId: z.string(),
+  clientId: z.string().nullable().optional(),
+  type: alertTypeSchema,
+  severity: severitySchema,
+  title: z.string(),
+  body: z.string(),
+  metadata: z.record(z.unknown()).default({}),
+  isRead: z.boolean(),
+  resolvedAt: z.string().nullable().optional(),
+  createdAt: z.string(),
+  expiresAt: z.string().nullable().optional(),
+});
+
+export const dailyBriefingSchema = z.object({
+  id: z.string(),
+  firmId: z.string(),
+  date: z.string(),
+  summary: z.string(),
+  clientCount: z.number(),
+  alertCount: z.number(),
+  metadata: z.record(z.unknown()).default({}),
+  createdAt: z.string(),
+});
+
+export const commandCentreResponseSchema = z.object({
+  briefing: dailyBriefingSchema.nullable(),
+  generatedNow: z.boolean(),
+  alerts: z.array(alertSchema),
+  unreadAlertCount: z.number(),
+  clientsNeedingAttention: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      daysSinceLastDocument: z.number(),
+      identifier: z.string(),
+    }),
+  ),
+  recentActivity: z.array(
+    z.object({
+      clientId: z.string(),
+      clientName: z.string(),
+      documentCount: z.number(),
+    }),
+  ),
+  tokenUsage: z.object({
+    today: z.number(),
+    cap: z.number(),
+  }),
+});

@@ -1,12 +1,23 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUser } from "../contexts/user-context";
+import { apiFetch } from "../lib/api";
 import { cn } from "@/lib/utils";
-import { MessageSquare, FileText, Users, RefreshCw, Mail, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  MessageSquare,
+  FileText,
+  Users,
+  RefreshCw,
+  Mail,
+  LogOut,
+} from "lucide-react";
 
 const NAV_ITEMS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/clients", label: "Clients", icon: Users },
@@ -17,6 +28,27 @@ const NAV_ITEMS = [
 export function AppNav() {
   const pathname = usePathname();
   const { user, logout } = useUser();
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
+
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const res = await apiFetch<{
+        success: boolean;
+        data?: { unreadAlertCount?: number };
+      }>("/api/dashboard/command-centre");
+      if (res.success && res.data) {
+        setUnreadAlerts(res.data.unreadAlertCount ?? 0);
+      }
+    } catch {
+      // Ignore — badge stays at current count
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchUnreadCount();
+    const interval = setInterval(() => void fetchUnreadCount(), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
 
   return (
     <aside className="fixed inset-y-0 left-0 w-56 bg-gray-900 flex flex-col z-10">
@@ -50,6 +82,11 @@ export function AppNav() {
             >
               <Icon className="h-4 w-4 shrink-0" />
               {label}
+              {href === "/dashboard" && unreadAlerts > 0 && (
+                <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                  {unreadAlerts > 99 ? "99+" : unreadAlerts}
+                </span>
+              )}
             </Link>
           );
         })}

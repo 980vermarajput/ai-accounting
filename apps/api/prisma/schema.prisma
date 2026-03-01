@@ -57,6 +57,22 @@ enum Feedback {
   none
 }
 
+enum AlertType {
+  INVOICE_OVERDUE
+  CLIENT_SILENT
+  DEADLINE_DETECTED
+  HIGH_RISK_LANGUAGE
+  SYNC_FAILURE
+  TOKEN_CAP_WARNING
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 // ─── Firms ───────────────────────────────────────────
 
 model Firm {
@@ -69,14 +85,16 @@ model Firm {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  users        User[]
-  clients      Client[]
-  documents    Document[]
-  chunks       Chunk[]
-  queries      Query[]
-  auditLogs    AuditLog[]
-  syncJobs     SyncJob[]
-  chatSessions ChatSession[]
+  users         User[]
+  clients       Client[]
+  documents     Document[]
+  chunks        Chunk[]
+  queries       Query[]
+  auditLogs     AuditLog[]
+  syncJobs      SyncJob[]
+  chatSessions  ChatSession[]
+  alerts        Alert[]
+  briefings     DailyBriefing[]
 
   @@map("firms")
 }
@@ -126,6 +144,7 @@ model Client {
   queries      Query[]
   chatSessions ChatSession[]
   chatMessages ChatMessage[]
+  alerts       Alert[]
 
   @@index([firmId])
   @@map("clients")
@@ -315,4 +334,48 @@ enum MessageRole {
   user
   assistant
   system // For context/tool outputs
+}
+
+// ─── Alerts ──────────────────────────────────────────
+
+model Alert {
+  id          String    @id @default(cuid())
+  firmId      String    @map("firm_id") @db.Uuid
+  clientId    String?   @map("client_id") @db.Uuid
+  type        AlertType
+  severity    Severity  @default(MEDIUM)
+  title       String
+  body        String    @db.Text
+  metadata    Json      @default("{}") @db.JsonB
+  isRead      Boolean   @default(false) @map("is_read")
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz()
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz()
+
+  firm   Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([firmId])
+  @@index([firmId, type, isRead])
+  @@index([firmId, severity])
+  @@map("alerts")
+}
+
+// ─── Daily Briefings ─────────────────────────────────
+
+model DailyBriefing {
+  id          String   @id @default(cuid())
+  firmId      String   @map("firm_id") @db.Uuid
+  date        DateTime @db.Date
+  summary     String   @db.Text
+  clientCount Int      @default(0) @map("client_count")
+  alertCount  Int      @default(0) @map("alert_count")
+  metadata    Json     @default("{}") @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+
+  @@unique([firmId, date])
+  @@index([firmId])
+  @@map("daily_briefings")
 }

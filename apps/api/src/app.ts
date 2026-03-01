@@ -12,32 +12,35 @@ import { draftsRouter } from "./routes/drafts";
 import { errorHandler } from "./middleware/error-handler";
 import { clientsRouter } from "./routes/clients";
 import { adminRouter } from "./routes/admin";
+import { dashboardRouter } from "./routes/dashboard";
 
 const app: Express = express();
 
 // ─── Global Middleware ───────────────────────────────
 // Enhanced security headers
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
     },
-  },
-  crossOriginEmbedderPolicy: true,
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  }
-}));
+    crossOriginEmbedderPolicy: true,
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  }),
+);
 
 app.use(
   cors({
@@ -58,6 +61,7 @@ app.use("/api/sync", syncRouter);
 app.use("/api/drafts", draftsRouter);
 app.use("/api/clients", clientsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 // ─── 404 catch-all ───────────────────────────────────
 app.use((_req, res) => {

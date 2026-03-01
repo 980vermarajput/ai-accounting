@@ -191,6 +191,67 @@ export interface ThreadSummaryResponse {
   };
 }
 
+// ─── Alerts & Briefings ──────────────────────────────
+
+export type AlertType =
+  | "INVOICE_OVERDUE"
+  | "CLIENT_SILENT"
+  | "DEADLINE_DETECTED"
+  | "HIGH_RISK_LANGUAGE"
+  | "SYNC_FAILURE"
+  | "TOKEN_CAP_WARNING";
+
+export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export interface Alert {
+  id: string;
+  firmId: string;
+  clientId?: string;
+  type: AlertType;
+  severity: Severity;
+  title: string;
+  body: string;
+  metadata: Record<string, unknown>;
+  isRead: boolean;
+  resolvedAt?: Date;
+  createdAt: Date;
+  expiresAt?: Date;
+  client?: { id: string; name: string };
+}
+
+export interface DailyBriefing {
+  id: string;
+  firmId: string;
+  date: Date;
+  summary: string;
+  clientCount: number;
+  alertCount: number;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface CommandCentreResponse {
+  briefing: DailyBriefing | null;
+  generatedNow: boolean;
+  alerts: Alert[];
+  unreadAlertCount: number;
+  clientsNeedingAttention: {
+    id: string;
+    name: string;
+    daysSinceLastDocument: number;
+    identifier: string;
+  }[];
+  recentActivity: {
+    clientId: string;
+    clientName: string;
+    documentCount: number;
+  }[];
+  tokenUsage: {
+    today: number;
+    cap: number;
+  };
+}
+
 // ─── API Responses ───────────────────────────────────
 
 export interface ApiResponse<T = unknown> {

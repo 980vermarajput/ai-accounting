@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 1 March 2026 (18:00 UTC)
-**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools — All 179 Tests Passing (135 API + 44 Shared)
+**Last Updated:** 1 March 2026 (23:00 UTC)
+**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre — All 207 Tests Passing (154 API + 53 Shared)
 
 ---
 
@@ -18,10 +18,10 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 ### Quick Status
 
 - ✅ **Monorepo Structure:** pnpm + Turborepo configured, all workspaces linked
-- ✅ **API Server:** Express.js with health + auth + documents + chat + sync + drafts + clients routes on :4000
+- ✅ **API Server:** Express.js with health + auth + documents + chat + sync + drafts + clients + admin + dashboard routes on :4000
 - ✅ **Web Frontend:** Next.js 14 with Tailwind CSS, full app UI on :3000
-- ✅ **Shared Types:** Domain model + Zod validation schemas defined (11 schemas)
-- ✅ **Database:** Postgres 16 + pgvector with RLS, 10 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs, chat_sessions, chat_messages), `embedding Unsupported("vector(1536)")` protected
+- ✅ **Shared Types:** Domain model + Zod validation schemas defined (17 schemas including dashboard/alert/briefing)
+- ✅ **Database:** Postgres 16 + pgvector with RLS, 12 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs, chat_sessions, chat_messages, alerts, daily_briefings), `embedding Unsupported("vector(1536)")` protected
 - ✅ **Migrations:** Applied + seeded with demo firm/users/clients
 - ✅ **Authentication:** Google OAuth + JWT + HttpOnly cookies + Redis JWT blacklist (fail-closed); AES-256-GCM refresh token encryption; dev header bypass protection
 - ✅ **Rate Limiting:** Redis sliding-window — per-user 60/hr, per-firm 500/hr, public endpoints 30/min
@@ -29,7 +29,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - ✅ **Gmail Sync Limits:** 10K emails max per sync, 24-month lookback window, newsletter/automated email filtering
 - ✅ **Security Headers:** Enhanced CSP, HSTS (1-year), Cross-Origin Embedder Policy, frame protection
 - ✅ **Observability:** Structured JSON logging for costs, auth events, RAG metrics, sync jobs, errors
-- ✅ **Vitest Test Suite:** 179 tests passing (135 API [100 unit + 35 integration] + 44 shared)
+- ✅ **Vitest Test Suite:** 207 tests passing (154 API [117 unit + 35 integration + 2 new test files] + 53 shared)
 - ✅ **ESLint + Prettier:** ESLint 9 flat config, Prettier 3.8.1 — 0 errors, 9 acceptable warnings
 - ✅ **CI/CD Pipeline:** GitHub Actions workflow for build, typecheck, lint, test on PRs + main
 - ✅ **BullMQ Sync Workers:** Gmail + Drive workers runtime-tested; attachment extraction working
@@ -47,6 +47,10 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - ✅ **Keyword-Based Sync:** Gmail/Drive sync supports optional keyword filtering (AND/OR logic) for targeted document ingestion
 - ✅ **Client Management UI:** Full client listing, creation, detail views with document analytics and re-sync capabilities
 - ✅ **Runtime Pipeline:** Gmail sync → extraction → chunking → embedding → RAG chat tested end-to-end
+- ✅ **Proactive AI Command Centre:** Daily briefings (GPT-4o-mini), alert detection (3 rules + dedup), dashboard API (5 endpoints), frontend Command Centre page
+- ✅ **Alert Detection:** INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE rules with 24h deduplication
+- ✅ **Daily Briefing Generator:** GPT-4o-mini summaries with Redis cache (23hr TTL), idempotent per firm per day
+- ✅ **BullMQ Scheduler:** Daily cron at 07:00 IST (01:30 UTC) for alert detection + briefing generation
 
 ---
 
@@ -54,35 +58,38 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ### Package Infrastructure
 
-| Package                 | Status  | Purpose                                                                                     |
-| ----------------------- | ------- | ------------------------------------------------------------------------------------------- |
-| `@ai-accounting/shared` | ✅ Live | TypeScript types + Zod validation schemas, exported from barrel file                        |
-| `@ai-accounting/api`    | ✅ Live | Express server, 6 routers (health/auth/docs/chat/sync/drafts), error handler, Prisma client |
-| `@ai-accounting/web`    | ✅ Live | Next.js app, landing page, Tailwind CSS setup, API health check UI                          |
+| Package                 | Status  | Purpose                                                                                                             |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `@ai-accounting/shared` | ✅ Live | TypeScript types + Zod validation schemas, exported from barrel file                                                |
+| `@ai-accounting/api`    | ✅ Live | Express server, 9 routers (health/auth/docs/chat/sync/drafts/clients/admin/dashboard), error handler, Prisma client |
+| `@ai-accounting/web`    | ✅ Live | Next.js app, landing page, Tailwind CSS setup, API health check UI                                                  |
 
 ### Database & ORM
 
 - **Prisma 6.19.2** installed with @prisma/client
-- **10 tables** created with pgvector support: `firms`, `users`, `clients`, `documents`, `chunks`, `queries`, `audit_logs`, `sync_jobs`, `chat_sessions`, `chat_messages`
+- **12 tables** created with pgvector support: `firms`, `users`, `clients`, `documents`, `chunks`, `queries`, `audit_logs`, `sync_jobs`, `chat_sessions`, `chat_messages`, `alerts`, `daily_briefings`
 - **RLS policies** enabled on all tables via `firm_id` partition key
 - **Migrations** applied successfully against local Postgres 16 + pgvector
 - **Seed data** created: 1 firm (Sharma & Associates), 2 users (admin + member), 2 clients
 - **pgvector column protected**: `embedding Unsupported("vector(1536)")` in Chunk model prevents Prisma from auto-dropping it
 - **IVFFlat index**: `idx_chunks_embedding` with `vector_cosine_ops`, `lists=100`
 - **Conversation memory schema**: ChatSession (with auto-expiry) + ChatMessage (with token tracking and metadata)
+- **Alert & Briefing schema**: Alert model (with firmId, clientId, type, severity, title, body, metadata, isRead, resolvedAt, expiresAt; indexes on [firmId], [firmId,type,isRead], [firmId,severity]) + DailyBriefing model (with @@unique([firmId, date]))
+- **New enums**: `AlertType` (INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE, COMPLIANCE_DEADLINE, DOCUMENT_ANOMALY, SYSTEM_ALERT) + `Severity` (CRITICAL, HIGH, MEDIUM, LOW)
 
-### API Routes (6 Routers)
+### API Routes (9 Routers)
 
-| Router         | Mounted At       | Status  | Endpoints                                                                                                                    |
-| -------------- | ---------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `health.ts`    | `/api/health`    | ✅ Live | `GET /` — service status                                                                                                     |
-| `auth.ts`      | `/api/auth`      | ✅ Live | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`                                                             |
-| `documents.ts` | `/api/documents` | ✅ Live | `GET /` (list), `GET /:id`, `GET /thread/:threadId` (thread summary), `POST /upload` (multer + extract/chunk), `DELETE /:id` |
-| `chat.ts`      | `/api/chat`      | ✅ Live | `POST /` (RAG query with session support), `GET /history`, `POST /:queryId/feedback`                                         |
-| `sync.ts`      | `/api/sync`      | ✅ Live | `POST /gmail`, `POST /drive` (with keyword filtering), `GET /status`, `POST /cancel/:jobId`                                  |
-| `drafts.ts`    | `/api/drafts`    | ✅ Live | `POST /` (generate), `POST /refine`, `POST /send` (Gmail Drafts API)                                                         |
-| `clients.ts`   | `/api/clients`   | ✅ Live | `GET /` (list), `POST /` (create), `GET /:id` (detail), `GET /:id/summary` (snapshot + risk), `POST /:id/assign-docs`        |
-| `admin.ts`     | `/api/admin`     | ✅ Live | `POST /cleanup-sessions`, `GET /firm-snapshot/:firmId`                                                                       |
+| Router         | Mounted At       | Status  | Endpoints                                                                                                                               |
+| -------------- | ---------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `health.ts`    | `/api/health`    | ✅ Live | `GET /` — service status                                                                                                                |
+| `auth.ts`      | `/api/auth`      | ✅ Live | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`                                                                        |
+| `documents.ts` | `/api/documents` | ✅ Live | `GET /` (list), `GET /:id`, `GET /thread/:threadId` (thread summary), `POST /upload` (multer + extract/chunk), `DELETE /:id`            |
+| `chat.ts`      | `/api/chat`      | ✅ Live | `POST /` (RAG query with session support), `GET /history`, `POST /:queryId/feedback`                                                    |
+| `sync.ts`      | `/api/sync`      | ✅ Live | `POST /gmail`, `POST /drive` (with keyword filtering), `GET /status`, `POST /cancel/:jobId`                                             |
+| `drafts.ts`    | `/api/drafts`    | ✅ Live | `POST /` (generate), `POST /refine`, `POST /send` (Gmail Drafts API)                                                                    |
+| `clients.ts`   | `/api/clients`   | ✅ Live | `GET /` (list), `POST /` (create), `GET /:id` (detail), `GET /:id/summary` (snapshot + risk), `POST /:id/assign-docs`                   |
+| `admin.ts`     | `/api/admin`     | ✅ Live | `POST /cleanup-sessions`, `GET /firm-snapshot/:firmId`                                                                                  |
+| `dashboard.ts` | `/api/dashboard` | ✅ Live | `GET /command-centre` (full payload), `GET /briefing`, `GET /alerts` (paginated), `PATCH /alerts/:id/read`, `PATCH /alerts/:id/resolve` |
 
 ### Utilities & Middleware
 
@@ -112,7 +119,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 ### Vitest Test Suite
 
 - **`packages/shared/vitest.config.ts`** + **`apps/api/vitest.config.ts`** — Vitest configured in both packages
-- **`packages/shared/src/schemas.test.ts`** — 44 tests covering all 7 Zod schemas (valid, defaults, coercion, boundary values — including new `sendDraftSchema`)
+- **`packages/shared/src/schemas.test.ts`** — 53 tests covering all Zod schemas (valid, defaults, coercion, boundary values — including `sendDraftSchema`, `alertListQuerySchema`, `alertSchema`, `dailyBriefingSchema`, `commandCentreResponseSchema`)
 - **`apps/api/src/lib/auth.test.ts`** — 22 tests for `encrypt`/`decrypt`, `signJwt`/`verifyJwt`, `buildGoogleAuthUrl`
 - **`apps/api/src/middleware/auth.test.ts`** — 11 tests for `requireAuth` (dev bypass, JWT, expired, Redis blacklist mock) and `requireAdmin` (roles)
 - **`apps/api/src/lib/chunker.test.ts`** — 11 tests for `chunkText` (empty input, sequential index, token cap, overlap, infinite-loop guard)
@@ -120,8 +127,11 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`apps/api/src/lib/embedder.test.ts`** — 8 tests for `embedChunks` (empty input, batch size 100, 150-chunk split, order preservation, API call shape, error propagation) — OpenAI mocked via `vi.hoisted` + `vi.mock`
 - **`apps/api/src/lib/rag.test.ts`** — 23 tests for `searchChunks` (threshold filtering, recency weighting, score sorting, limit, field mapping, age-0 and age-365 score invariants), `generateRagAnswer` (JSON parsing, fallback on invalid JSON, token/cost calculation, follow-up capping, context injection), and `computeConfidence` (empty chunks, high/medium/low levels, coverage cap)
 - **`apps/api/src/routes/integration.test.ts`** — 35 supertest integration tests covering all API endpoints: Health (2), Auth (4), Documents (8), Chat (6), Drafts (6), Clients (6), Sync (1), Error handling (2); mocks Redis `multi()` chain for rate limiter, Prisma models, dev auth via `X-Dev-User` header
+- **`apps/api/src/lib/alert-detector.test.ts`** — 5 tests for alert detection: no-condition baseline, CLIENT_SILENT creation, dedup skip, HIGH_RISK_LANGUAGE detection, cross-firm error resilience
+- **`apps/api/src/lib/briefing-generator.test.ts`** — 4 tests for daily briefing: DB idempotency, Redis cache hit, fresh LLM generation, Redis cache write verification
+- **`apps/api/src/routes/dashboard.test.ts`** — 8 tests for dashboard routes: paginated alerts, severity filter, unreadOnly filter, mark-as-read, read 404, cache invalidation, resolve alert, briefing endpoint
 - **`turbo.json`** — `test` task added with `dependsOn: ["^build"]`
-- **Total: 179 tests, all green** (135 API [100 unit + 35 integration] + 44 shared)
+- **Total: 207 tests, all green** (154 API [117 unit + 35 integration + 2 new] + 53 shared)
 
 ### Embedding Pipeline
 
@@ -148,9 +158,10 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`apps/web/src/app/(app)/clients/page.tsx`** — **NEW:** Client management dashboard with listing, creation modal (name + identifier + email domain), status indicators, document counts, "View Details" navigation
 - **`apps/web/src/app/(app)/clients/[id]/page.tsx`** — **NEW:** Client detail view with comprehensive analytics: basic info, document breakdown by source, recent activity timeline, risk indicators, Gmail thread viewer integration, re-sync documents button
 - **`apps/web/src/components/thread-viewer.tsx`** — **NEW:** Gmail conversation thread viewer component, displays email threads with sender/date/subject/body, collapsible message cards, "View in Gmail" links
-- **`apps/web/src/components/app-nav.tsx`** — fixed 224px sidebar: firm name + role, Chat/Documents/Sync/Drafts/**Clients** nav links, user avatar + sign-out button
+- **`apps/web/src/components/app-nav.tsx`** — fixed 224px sidebar: firm name + role, **Dashboard** (with unread alert count badge, 5-min refresh)/Chat/Documents/Sync/Drafts/Clients nav links, user avatar + sign-out button
 - **`apps/web/src/app/not-found.tsx`** — **NEW:** Custom 404 page with navigation links
 - **`apps/web/src/app/(app)/drafts/page.tsx`** — AI email drafting: instruction textarea + client-ID filter + context toggle → `POST /api/drafts`; draft rendered in editable subject+body fields; Refine panel → `POST /api/drafts/refine`; Context Sources accordion; Copy-to-clipboard button with cost/latency metadata; **Save to Gmail** button: recipient email input → `POST /api/drafts/send` → success banner with Gmail draft ID
+- **`apps/web/src/app/(app)/dashboard/page.tsx`** — **NEW (Sprint 1):** Proactive AI Command Centre with 4 sections: daily briefing card (GPT-4o-mini summary), active alerts feed (mark-read/resolve actions), clients needing attention, recent activity (7 days); token usage display; auto-refresh every 5 minutes
 
 ### Email Drafts
 
@@ -269,6 +280,48 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`extractEmailDomain()`** — extracts domain from email addresses
 - **`assignDocumentsByEmail()`** — matches Gmail documents to clients by email domain
 - **Used for auto-assignment** — helps populate clientId on ingested emails
+
+### Proactive AI Command Centre (Sprint 1 — 1 Mar 2026)
+
+**Alert Detection Service (`apps/api/src/lib/alert-detector.ts`):**
+
+- **`detectInvoiceOverdue(firmId)`** — scans recent chunks for invoice filename patterns >45 days old, creates INVOICE_OVERDUE alerts
+- **`detectClientSilent(firmId)`** — finds clients with no documents in 30/60+ days, creates CLIENT_SILENT alerts (MEDIUM for 30d, HIGH for 60d)
+- **`detectHighRiskLanguage(firmId)`** — keyword scan across recent chunks for terms like "penalty", "notice", "demand", "seizure", etc.
+- **`isDuplicate(firmId, clientId, type)`** — 24-hour deduplication check to prevent duplicate alerts
+- **`detectAlertsForFirm(firmId)`** — orchestrates all 3 rules via `Promise.allSettled`, returns `{ generated, skipped, errors }`
+- **`detectAlertsForAllFirms()`** — iterates all firms with per-firm error isolation
+
+**Daily Briefing Generator (`apps/api/src/lib/briefing-generator.ts`):**
+
+- **`generateDailyBriefing(firmId)`** — idempotent: checks DB → Redis cache → generates fresh via GPT-4o-mini
+- **Briefing model**: `gpt-4o-mini`, max 500 completion tokens, structured prompt with firm stats + alert summary
+- **Redis cache**: key `briefing:{firmId}:{YYYY-MM-DD}`, 23-hour TTL
+- **DB persistence**: `DailyBriefing` record with unique constraint on `[firmId, date]`
+
+**BullMQ Scheduler (`apps/api/src/queues/scheduler.queue.ts` + `apps/api/src/workers/scheduler.worker.ts`):**
+
+- **Daily cron**: `"30 1 * * *"` (01:30 UTC = 07:00 IST) via `upsertJobScheduler`
+- **Worker flow**: detect alerts for all firms → generate briefings for all firms
+- **Concurrency 1**: sequential processing to respect OpenAI rate limits
+- **Wired into `index.ts`**: `startSchedulerWorker()` called on server boot (5th worker)
+
+**Dashboard API (`apps/api/src/routes/dashboard.ts`):**
+
+- **`GET /command-centre`** — full dashboard payload: briefing + alerts (unread, top 10) + clients needing attention (>30d silent) + recent activity (7-day counts) + token usage; Redis cached for 15 minutes
+- **`GET /briefing`** — today's briefing for the firm (generates if needed)
+- **`GET /alerts`** — paginated alert list with `severity` and `unreadOnly` filters
+- **`PATCH /alerts/:id/read`** — marks alert as read (with ownership check)
+- **`PATCH /alerts/:id/resolve`** — resolves alert with timestamp (with ownership check)
+
+**Dashboard Frontend (`apps/web/src/app/(app)/dashboard/page.tsx`):**
+
+- Daily Briefing card with AI-generated summary
+- Active Alerts feed with mark-as-read and resolve actions, severity color-coding
+- Clients Needing Attention section (>30 days silent)
+- Recent Activity summary (7-day document, query, alert counts)
+- Token usage display with daily cap indicator
+- Auto-refresh every 5 minutes via `setInterval`
 
 ### Chat UI Enhancements
 
@@ -397,6 +450,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 | Client management UI            | 1 Mar 2026          | Full CRUD + detail views, document analytics, thread viewer, bulk assignment capabilities  |
 | Admin session cleanup           | 1 Mar 2026          | Auto-cleanup of expired sessions, firm snapshot generation endpoint                        |
 | Email-based document assignment | 1 Mar 2026          | Auto-assigns Gmail documents to clients by matching email domain                           |
+| Proactive AI Command Centre     | 1 Mar 2026          | Daily briefings, alert detection (3 rules), dashboard API + frontend, BullMQ scheduler     |
 
 ### Runtime Bugs Fixed (Previous Sessions)
 
@@ -436,19 +490,19 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ## Key Metrics
 
-| Metric                             | Value                                                                   |
-| ---------------------------------- | ----------------------------------------------------------------------- |
-| **Packages**                       | 3 (api, web, shared)                                                    |
-| **TypeScript Files**               | ~60 (routes, middleware, utilities, workers, tools, context management) |
-| **Database Tables**                | 10 with RLS enabled                                                     |
-| **REST Endpoints**                 | 29 (health + auth + documents + chat + sync + drafts + clients + admin) |
-| **Zod Schemas**                    | 13 validation schemas                                                   |
-| **Test Count**                     | 179 (135 API + 44 shared)                                               |
-| **Total LOC** (excl. node_modules) | ~4500                                                                   |
-| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                                               |
-| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                                          |
-| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)                                |
-| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379                       |
+| Metric                             | Value                                                                               |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| **Packages**                       | 3 (api, web, shared)                                                                |
+| **TypeScript Files**               | ~70 (routes, middleware, utilities, workers, tools, context, alerts, briefings)     |
+| **Database Tables**                | 12 with RLS enabled                                                                 |
+| **REST Endpoints**                 | 34 (health + auth + documents + chat + sync + drafts + clients + admin + dashboard) |
+| **Zod Schemas**                    | 19 validation schemas                                                               |
+| **Test Count**                     | 207 (154 API + 53 shared)                                                           |
+| **Total LOC** (excl. node_modules) | ~4500                                                                               |
+| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                                                           |
+| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                                                      |
+| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)                                            |
+| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379                                   |
 
 ---
 
@@ -478,10 +532,68 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 1. **Session Management UI** — Frontend for viewing/managing active chat sessions, clearing old conversations
 2. **Advanced Client Analytics** — Predictive risk modeling based on communication patterns, compliance deadline tracking
-3. **ESLint + Prettier** — add to all packages for consistent code style (if not already done)
-4. **Enhanced Integration Tests** — Add tests for conversation memory, LLM tools, keyword sync
-5. **OCR fallback** — `tesseract.js` for scanned PDF images that return no text from pdf-parse
-6. **Production Deployment** — Dockerized deployment to Azure/AWS/GCP with proper secrets management
+3. **Enhanced Integration Tests** — Add tests for conversation memory, LLM tools, keyword sync
+4. **OCR Fallback** — `tesseract.js` for scanned PDF images that return no text from pdf-parse
+5. **Production Deployment** — Dockerized deployment to Azure/AWS/GCP with proper secrets management
+6. **External Monitoring** — Application Insights / Datadog integration (basic logging already in place)
+7. **API Documentation** — OpenAPI/Swagger spec, deployment guide, user manual
+
+---
+
+## ✅ SPRINT 1 — MULTI-CLIENT AI COMMAND CENTRE (Completed 1 Mar 2026)
+
+**Goal:** Replace reactive search with a proactive daily briefing dashboard — **DONE**
+
+### 1A. Database Migrations ✅
+
+- Added `alerts` and `daily_briefings` tables with `AlertType` and `Severity` enums
+- Updated `Firm` and `Client` models to reference alerts/briefings
+- Migration `20260301131919_add_alerts_and_briefings` applied successfully
+
+### 1B. Backend — Alert Detection Service ✅
+
+- Created `apps/api/src/lib/alert-detector.ts` with 3 detection rules: INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE
+- Deduplication: skips if identical (firmId + clientId + type) exists and isRead = false and createdAt > 24hr ago
+- `detectAlertsForFirm(firmId)` runs all 3 via `Promise.allSettled`, returns `AlertDetectionResult { generated, skipped, errors }`
+- `detectAlertsForAllFirms()` iterates all firms with error isolation
+- 5 unit tests passing
+
+### 1C. Backend — Daily Briefing Service ✅
+
+- Created `apps/api/src/lib/briefing-generator.ts` with GPT-4o-mini daily summaries
+- Redis cache (23hr TTL) + DB persistence, idempotent per firm per day
+- `generateDailyBriefing(firmId)` checks DB → Redis → generates fresh via LLM
+- 4 unit tests passing
+
+### 1D. Backend — BullMQ Scheduler ✅
+
+- Created `apps/api/src/queues/scheduler.queue.ts` with daily cron pattern `"30 1 * * *"` (01:30 UTC = 07:00 IST)
+- Created `apps/api/src/workers/scheduler.worker.ts` — processes alert detection + briefing generation for all firms
+- `startSchedulerWorker()` wired into `apps/api/src/index.ts`
+
+### 1E. Backend — New API Endpoints ✅
+
+- Created `apps/api/src/routes/dashboard.ts` with 5 endpoints:
+  - `GET /command-centre` — full dashboard payload with 15min Redis cache
+  - `GET /briefing` — daily briefing for firm
+  - `GET /alerts` — paginated alerts with severity/unreadOnly filters
+  - `PATCH /alerts/:id/read` — mark alert as read
+  - `PATCH /alerts/:id/resolve` — resolve alert
+- Added 6 Zod schemas to `packages/shared/src/schemas.ts` (alertTypeSchema, severitySchema, alertListQuerySchema, alertSchema, dailyBriefingSchema, commandCentreResponseSchema)
+- Added types to `packages/shared/src/types.ts` (Alert, DailyBriefing, CommandCentreResponse, AlertType, Severity)
+- 8 route tests passing
+
+### 1F. Frontend — Command Centre Page ✅
+
+- Created `apps/web/src/app/(app)/dashboard/page.tsx` with 4 sections: daily briefing, active alerts feed, clients needing attention, recent activity summary
+- Updated `apps/web/src/components/app-nav.tsx` with Dashboard as first nav item + unread alert count badge (5-min refresh)
+- Auto-refresh every 5 minutes
+
+### 1G. Tests for Sprint 1 ✅
+
+- `alert-detector.test.ts` — 5 tests (no-condition, creation, dedup, detection, cross-firm resilience)
+- `briefing-generator.test.ts` — 4 tests (DB idempotency, Redis cache, LLM generation, cache write)
+- `dashboard.test.ts` — 8 tests (pagination, filters, mark-read, resolve, 404, cache invalidation, briefing)
 
 ---
 
@@ -525,6 +637,9 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - 🧠 Smart conversation memory with automatic context management
 - 🔧 Real-time LLM tools for dynamic firm analytics and client lookup
 - 🎯 Keyword-based sync filtering for targeted document ingestion
+- 📊 Proactive AI Command Centre with daily briefings, alert detection, and dashboard UI
+- 🚨 3 alert detection rules (INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE) with 24h dedup
+- 📅 BullMQ daily scheduler (07:00 IST) for automated alert + briefing generation
 - 👥 Full client management UI with document analytics and bulk assignment
 - 🧹 Automatic session cleanup to prevent database bloat
 - 📊 Comprehensive firm snapshot generation for AI context

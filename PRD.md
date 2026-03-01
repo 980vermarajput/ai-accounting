@@ -1,8 +1,8 @@
 # MVP PRD — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.1 — Updated 2026-02-26
+> **Version:** 2.2 — Updated 2026-03-01
 > **Author:** @980vermarajput
-> **Status:** MVP Core Complete — In Production Testing
+> **Status:** MVP Core Complete — Proactive AI Command Centre Live — All 207 Tests Passing
 
 ---
 
@@ -56,6 +56,7 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | **RAG Chat**         | Ask questions → get grounded answers with source citations |
 | **Draft Email**      | Compose replies in professional CA tone with action items  |
 | **Admin Dashboard**  | Sync status, user management, data freshness indicators    |
+| **Command Centre**   | Proactive daily briefings, alert detection, dashboard UI   |
 | **Multi-tenancy**    | Firm-level data isolation with row-level security          |
 | **Audit Logging**    | Every query, every chunk sent to LLM, every user action    |
 | **Billing (simple)** | Stripe Checkout for per-seat monthly billing               |
@@ -73,18 +74,18 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ## 5 — High-Level System Architecture
 
-| Layer               | Technology                                        | Notes                                           |
-| ------------------- | ------------------------------------------------- | ----------------------------------------------- |
-| **Frontend**        | Next.js 14 (App Router)                           | SSR + React Server Components, Tailwind CSS     |
-| **Backend API**     | Node.js 20 + Express.js                           | TypeScript, modular route handlers              |
-| **Background Jobs** | BullMQ + Redis                                    | Email sync, Drive sync, chunking, embedding     |
-| **Database**        | PostgreSQL 16 + pgvector                          | RLS for multi-tenancy, vector similarity search |
-| **Cache**           | Redis 7                                           | Session cache, job queue, rate-limit counters   |
-| **Object Storage**  | AWS S3                                            | Raw documents, processed text cache             |
-| **AI / LLM**        | OpenAI API (GPT-4o-mini + text-embedding-3-small) | Swappable via adapter pattern                   |
-| **Hosting**         | AWS Mumbai (ap-south-1)                           | ECS Fargate, RDS, ElastiCache, S3               |
-| **Monitoring**      | CloudWatch + Sentry + Prometheus/Grafana          | Logs, errors, metrics                           |
-| **Auth**            | Custom JWT + Google OAuth 2.0                     | Refresh token encrypted at rest (AES-256-GCM)   |
+| Layer               | Technology                                        | Notes                                                        |
+| ------------------- | ------------------------------------------------- | ------------------------------------------------------------ |
+| **Frontend**        | Next.js 14 (App Router)                           | SSR + React Server Components, Tailwind CSS                  |
+| **Backend API**     | Node.js 20 + Express.js                           | TypeScript, modular route handlers                           |
+| **Background Jobs** | BullMQ + Redis                                    | Email sync, Drive sync, chunking, embedding, daily scheduler |
+| **Database**        | PostgreSQL 16 + pgvector                          | RLS for multi-tenancy, vector similarity search              |
+| **Cache**           | Redis 7                                           | Session cache, job queue, rate-limit counters                |
+| **Object Storage**  | AWS S3                                            | Raw documents, processed text cache                          |
+| **AI / LLM**        | OpenAI API (GPT-4o-mini + text-embedding-3-small) | Swappable via adapter pattern                                |
+| **Hosting**         | AWS Mumbai (ap-south-1)                           | ECS Fargate, RDS, ElastiCache, S3                            |
+| **Monitoring**      | CloudWatch + Sentry + Prometheus/Grafana          | Logs, errors, metrics                                        |
+| **Auth**            | Custom JWT + Google OAuth 2.0                     | Refresh token encrypted at rest (AES-256-GCM)                |
 
 ---
 
@@ -217,6 +218,36 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | started_at          | TIMESTAMPTZ                                   |          |
 | completed_at        | TIMESTAMPTZ                                   |          |
 | created_at          | TIMESTAMPTZ                                   |          |
+
+### `alerts` (Added Sprint 1 — 1 Mar 2026)
+
+| Column      | Type                                                                                                                 | Notes             |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| id          | CUID PK                                                                                                              |                   |
+| firm_id     | FK → firms.id                                                                                                        | RLS partition key |
+| client_id   | FK → clients.id                                                                                                      | Nullable          |
+| type        | ENUM('INVOICE_OVERDUE','CLIENT_SILENT','HIGH_RISK_LANGUAGE','COMPLIANCE_DEADLINE','DOCUMENT_ANOMALY','SYSTEM_ALERT') |                   |
+| severity    | ENUM('CRITICAL','HIGH','MEDIUM','LOW')                                                                               |                   |
+| title       | VARCHAR(255)                                                                                                         |                   |
+| body        | TEXT                                                                                                                 | Nullable          |
+| metadata    | JSONB                                                                                                                | Flexible fields   |
+| is_read     | BOOLEAN                                                                                                              | Default false     |
+| resolved_at | TIMESTAMPTZ                                                                                                          | Nullable          |
+| expires_at  | TIMESTAMPTZ                                                                                                          | Nullable          |
+| created_at  | TIMESTAMPTZ                                                                                                          |                   |
+
+**Indexes:** `[firmId]`, `[firmId, type, isRead]`, `[firmId, severity]`
+
+### `daily_briefings` (Added Sprint 1 — 1 Mar 2026)
+
+| Column     | Type          | Notes                           |
+| ---------- | ------------- | ------------------------------- |
+| id         | CUID PK       |                                 |
+| firm_id    | FK → firms.id | RLS partition key               |
+| date       | DATE          | @@unique([firmId, date])        |
+| summary    | TEXT          | AI-generated daily summary      |
+| metadata   | JSONB         | Alert count, client count, etc. |
+| created_at | TIMESTAMPTZ   |                                 |
 
 ---
 
@@ -382,6 +413,16 @@ Document → Text Extraction → Normalization → Dedup Check
 | DELETE | `/api/admin/users/:id`    | Revoke user access + tokens | ⏳ Planned |
 | GET    | `/api/admin/usage`        | Query/token/cost stats      | ⏳ Planned |
 | GET    | `/api/admin/audit-log`    | Audit log with filters      | ⏳ Planned |
+
+### Dashboard / Command Centre (Added Sprint 1 — 1 Mar 2026)
+
+| Method | Endpoint                            | Description                                           | Status  |
+| ------ | ----------------------------------- | ----------------------------------------------------- | ------- |
+| GET    | `/api/dashboard/command-centre`     | Full dashboard payload (briefing + alerts + activity) | ✅ Live |
+| GET    | `/api/dashboard/briefing`           | Today's AI-generated daily briefing for firm          | ✅ Live |
+| GET    | `/api/dashboard/alerts`             | Paginated alerts with severity/unreadOnly filters     | ✅ Live |
+| PATCH  | `/api/dashboard/alerts/:id/read`    | Mark alert as read                                    | ✅ Live |
+| PATCH  | `/api/dashboard/alerts/:id/resolve` | Resolve alert with timestamp                          | ✅ Live |
 
 ---
 
@@ -601,16 +642,17 @@ Click "Draft Reply" → Modal opens with:
 
 ## 14 — Dev Milestones (90-Day Plan)
 
-| Week | Sprint                    | Deliverables                                                                                 | Status     |
-| ---- | ------------------------- | -------------------------------------------------------------------------------------------- | ---------- |
-| 0    | **Setup**                 | Repo structure, CI/CD pipeline, AWS infra (Terraform), DB schema migration, Google OAuth app | ✅ Done    |
-| 1–2  | **Auth & Foundation**     | Google OAuth flow, JWT sessions, user/firm CRUD, RLS setup, basic Next.js shell              | ✅ Done    |
-| 3–4  | **Ingestion Pipeline**    | Gmail sync worker, Drive sync worker, S3 storage, document status tracking                   | ✅ Done    |
-| 5–6  | **Text Processing**       | PDF/DOCX/XLSX extraction, text normalization, chunking pipeline, embedding batch jobs        | ✅ Done    |
-| 7–8  | **RAG Engine**            | Vector search with pgvector, prompt assembly, LLM integration, chat API, source citations    | ✅ Done    |
-| 9–10 | **Chat UI & Email Draft** | Chat interface, conversation history, draft email modal, client sidebar                      | ✅ Done    |
-| 11   | **Admin & Polish**        | Admin dashboard, audit logs, usage stats, sync status UI, error handling                     | ⏳ Partial |
-| 12   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection           | ⏳ Pending |
+| Week | Sprint                    | Deliverables                                                                                  | Status     |
+| ---- | ------------------------- | --------------------------------------------------------------------------------------------- | ---------- |
+| 0    | **Setup**                 | Repo structure, CI/CD pipeline, AWS infra (Terraform), DB schema migration, Google OAuth app  | ✅ Done    |
+| 1–2  | **Auth & Foundation**     | Google OAuth flow, JWT sessions, user/firm CRUD, RLS setup, basic Next.js shell               | ✅ Done    |
+| 3–4  | **Ingestion Pipeline**    | Gmail sync worker, Drive sync worker, S3 storage, document status tracking                    | ✅ Done    |
+| 5–6  | **Text Processing**       | PDF/DOCX/XLSX extraction, text normalization, chunking pipeline, embedding batch jobs         | ✅ Done    |
+| 7–8  | **RAG Engine**            | Vector search with pgvector, prompt assembly, LLM integration, chat API, source citations     | ✅ Done    |
+| 9–10 | **Chat UI & Email Draft** | Chat interface, conversation history, draft email modal, client sidebar                       | ✅ Done    |
+| 11   | **Admin & Polish**        | Admin dashboard, audit logs, usage stats, sync status UI, error handling                      | ✅ Done    |
+| 11+  | **Command Centre**        | Proactive AI Command Centre: alert detection, daily briefings, dashboard UI, BullMQ scheduler | ✅ Done    |
+| 12   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection            | ⏳ Pending |
 
 ---
 
