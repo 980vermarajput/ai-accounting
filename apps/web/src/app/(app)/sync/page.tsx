@@ -220,19 +220,35 @@ export default function SyncPage() {
   // ─── Render ───────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <PageHeader
-        title="Data Sync"
-        description={
-          hasActive
-            ? "Syncing in progress…"
-            : "Sync your Gmail and Google Drive to keep your AI context up to date."
-        }
-      />
+    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Enhanced Header Section */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5"></div>
+        <div className="relative bg-white/80 backdrop-blur-sm border-b border-slate-200/50 px-8 py-6">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 bg-blue-500/10 rounded-xl blur-lg"></div>
+              <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                <RefreshCw className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Data Sync
+              </h1>
+              <p className="text-sm text-slate-600 mt-1">
+                {hasActive
+                  ? "Syncing in progress…"
+                  : "Sync your Gmail and Google Drive to keep your AI context up to date."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Flash message */}
       {flash && (
-        <div className="mb-5">
+        <div className="px-8 pt-4">
           <FlashMessage
             variant={flash.type === "success" ? "success" : "error"}
             message={flash.message}
@@ -241,18 +257,19 @@ export default function SyncPage() {
         </div>
       )}
 
-      {/* Action cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-8 py-6">
+        {/* Action cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         {/* Gmail card */}
-        <Card>
-          <CardContent className="p-5">
+        <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100">
                 <Mail className="h-5 w-5 text-red-500" />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900">Gmail</h2>
-                <p className="text-xs text-muted">Sync emails and attachments</p>
+                <h2 className="font-semibold text-slate-800">Gmail</h2>
+                <p className="text-xs text-slate-600">Sync emails and attachments</p>
               </div>
             </div>
 
@@ -302,26 +319,23 @@ export default function SyncPage() {
             )}
 
             <Button
-              className="w-full"
-              variant="danger"
+              className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
               loading={startingGmail}
               onClick={() => void startSync("gmail")}
             >
               Start Gmail Sync
             </Button>
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Drive card */}
-        <Card>
-          <CardContent className="p-5">
+        <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
                 <HardDrive className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900">Google Drive</h2>
-                <p className="text-xs text-muted">Sync documents and spreadsheets</p>
+                <h2 className="font-semibold text-slate-800">Google Drive</h2>
+                <p className="text-xs text-slate-600">Sync documents and spreadsheets</p>
               </div>
             </div>
 
@@ -370,14 +384,13 @@ export default function SyncPage() {
             )}
 
             <Button
-              className="w-full"
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
               loading={startingDrive}
               onClick={() => void startSync("drive")}
             >
               Start Drive Sync
             </Button>
-          </CardContent>
-        </Card>
+        </div>
       </div>
 
       {/* Danger zone */}
@@ -431,52 +444,53 @@ export default function SyncPage() {
         </ModalFooter>
       </Modal>
 
-      {/* Recent jobs table */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent Sync Jobs</CardTitle>
-          <button
-            onClick={() => void fetchJobs()}
-            className="flex items-center gap-1 text-xs text-muted hover:text-gray-700 transition-colors"
-          >
-            <RefreshCw className="h-3 w-3" /> Refresh
-          </button>
-        </CardHeader>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12 gap-2">
-            <Spinner size="sm" />
-            <span className="text-sm text-muted">Loading…</span>
+        {/* Recent jobs table */}
+        <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg">
+          <div className="px-6 py-4 border-b border-slate-200/50 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-800">Recent Sync Jobs</h3>
+            <button
+              onClick={() => void fetchJobs()}
+              className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-800 transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" /> Refresh
+            </button>
           </div>
-        ) : jobs.length === 0 ? (
-          <EmptyState
-            icon={<Clock className="h-5 w-5" />}
-            title="No sync history yet"
-            description="Start a sync above to see jobs here."
-            className="py-12"
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-surface-tertiary text-left text-[11px] text-muted-foreground uppercase tracking-wide">
-                  <th className="px-5 py-2.5 font-semibold">Type</th>
-                  <th className="px-5 py-2.5 font-semibold">Status</th>
-                  <th className="px-5 py-2.5 font-semibold">Keywords</th>
-                  <th className="px-5 py-2.5 font-semibold">Found</th>
-                  <th className="px-5 py-2.5 font-semibold">Processed</th>
-                  <th className="px-5 py-2.5 font-semibold">Started</th>
-                  <th className="px-5 py-2.5 font-semibold">Duration</th>
-                  <th className="px-5 py-2.5 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-light">
-                {jobs.map((job) => (
-                  <tr
-                    key={job.id}
-                    className="hover:bg-surface-tertiary/50 transition-colors"
-                  >
-                    <td className="px-5 py-3 font-medium text-gray-900">
+
+          <div className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12 gap-2">
+                <Spinner size="sm" />
+                <span className="text-sm text-slate-600">Loading…</span>
+              </div>
+            ) : jobs.length === 0 ? (
+              <EmptyState
+                icon={<Clock className="h-5 w-5" />}
+                title="No sync history yet"
+                description="Start a sync above to see jobs here."
+                className="py-12"
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200/50 bg-slate-50/50 text-left text-[11px] text-slate-600 uppercase tracking-wide">
+                      <th className="px-5 py-4 font-semibold">Type</th>
+                      <th className="px-5 py-4 font-semibold">Status</th>
+                      <th className="px-5 py-4 font-semibold">Keywords</th>
+                      <th className="px-5 py-4 font-semibold">Found</th>
+                      <th className="px-5 py-4 font-semibold">Processed</th>
+                      <th className="px-5 py-4 font-semibold">Started</th>
+                      <th className="px-5 py-4 font-semibold">Duration</th>
+                      <th className="px-5 py-4 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200/30">
+                    {jobs.map((job) => (
+                      <tr
+                        key={job.id}
+                        className="hover:bg-slate-50/30 transition-colors duration-200"
+                      >
+                        <td className="px-5 py-4 font-medium text-slate-800">
                       <span className="inline-flex items-center gap-1.5">
                         {job.type === "gmail" ? (
                           <Mail className="h-3.5 w-3.5 text-red-500" />
@@ -486,39 +500,39 @@ export default function SyncPage() {
                         {job.type === "gmail" ? "Gmail" : "Drive"}
                       </span>
                     </td>
-                    <td className="px-5 py-3">
-                      <StatusBadge status={job.status} />
-                    </td>
-                    <td className="px-5 py-3">
-                      {job.keywords && job.keywords.length > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted font-mono">
-                          <ListFilter className="h-3 w-3" />
-                          {job.keywords.join(", ")}
-                          <span className="text-muted-foreground">
-                            ({job.includeAllKeywords ? "ALL" : "ANY"})
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">
-                          All documents
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-muted tabular-nums">
-                      {job.documentsFound ?? 0}
-                    </td>
-                    <td className="px-5 py-3 text-muted tabular-nums">
-                      {job.documentsProcessed ?? 0}
-                    </td>
-                    <td className="px-5 py-3 text-muted text-xs">
-                      {fmtDateSafe(job.startedAt)}
-                    </td>
-                    <td className="px-5 py-3 text-muted text-xs">
-                      {job.status === "running"
-                        ? "In progress…"
-                        : formatDuration(job.startedAt, job.completedAt)}
-                    </td>
-                    <td className="px-5 py-3">
+                        <td className="px-5 py-4">
+                          <StatusBadge status={job.status} />
+                        </td>
+                        <td className="px-5 py-4">
+                          {job.keywords && job.keywords.length > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-mono">
+                              <ListFilter className="h-3 w-3" />
+                              {job.keywords.join(", ")}
+                              <span className="text-slate-500">
+                                ({job.includeAllKeywords ? "ALL" : "ANY"})
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-500 italic">
+                              All documents
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600 tabular-nums">
+                          {job.documentsFound ?? 0}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600 tabular-nums">
+                          {job.documentsProcessed ?? 0}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600 text-xs">
+                          {fmtDateSafe(job.startedAt)}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600 text-xs">
+                          {job.status === "running"
+                            ? "In progress…"
+                            : formatDuration(job.startedAt, job.completedAt)}
+                        </td>
+                        <td className="px-5 py-4">
                       {(job.status === "queued" || job.status === "running") && (
                         <Button
                           variant="link"
@@ -543,11 +557,13 @@ export default function SyncPage() {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

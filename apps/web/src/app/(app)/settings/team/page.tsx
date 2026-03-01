@@ -30,6 +30,14 @@ import {
   Shield,
   UserMinus,
   Link as LinkIcon,
+  Crown,
+  Mail,
+  UserCheck,
+  Calendar,
+  ExternalLink,
+  Zap,
+  Lock,
+  Clock,
 } from "lucide-react";
 
 type FlashState = { type: "success" | "error"; message: string } | null;
@@ -150,26 +158,54 @@ export default function TeamSettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Team</h1>
-          <p className="mt-1 text-sm text-muted">
-            Manage members and invite colleagues to your firm
-          </p>
-        </div>
-        <Button
-          onClick={() => setShowInviteModal(true)}
-          size="sm"
-          className="flex items-center gap-1.5"
-        >
-          <Plus className="h-4 w-4" />
-          Invite Member
-        </Button>
-      </div>
-
+    <div className="p-6 space-y-8 max-w-5xl mx-auto">
       {flash && <FlashMessage variant={flash.type} message={flash.message} />}
+
+      {/* Enhanced Header Section */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-3xl blur-3xl"></div>
+        <div className="relative bg-white/50 backdrop-blur-sm rounded-2xl border border-white/20 p-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl"></div>
+                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
+                  <Users className="h-8 w-8 text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Team Management
+                </h1>
+                <p className="text-lg text-muted-foreground mt-1">
+                  Invite colleagues and manage permissions
+                </p>
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <UserCheck className="h-4 w-4" />
+                    <span>{members.length} members</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    <span>{invites.length} pending</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Lock className="h-4 w-4" />
+                    <span>Secure</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <Button
+              onClick={() => setShowInviteModal(true)}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Invite Member
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -177,187 +213,210 @@ export default function TeamSettingsPage() {
         </div>
       ) : (
         <>
-          {/* Members table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Members ({members.length})</CardTitle>
+          {/* Enhanced Members Section */}
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-gray-50">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                  <Users className="h-5 w-5" />
+                </div>
+                <span>Team Members ({members.length})</span>
+              </CardTitle>
             </CardHeader>
-            <div className="overflow-x-auto">
+            <CardContent>
               {members.length === 0 ? (
-                <CardContent>
-                  <EmptyState
-                    icon={<Users className="h-8 w-8 text-muted" />}
-                    title="No members yet"
-                    description="Invite team members to get started"
-                  />
-                </CardContent>
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Users className="h-8 w-8 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No team members yet</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Start building your team by inviting colleagues to join your firm
+                  </p>
+                  <Button
+                    onClick={() => setShowInviteModal(true)}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Send Your First Invite
+                  </Button>
+                </div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-tertiary">
-                    <tr>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
-                        Member
-                      </th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
-                        Role
-                      </th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
-                        Joined
-                      </th>
-                      <th className="py-3 px-4" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-light">
-                    {members.map((member) => {
-                      const isSelf = member.id === currentUser?.id;
-                      return (
-                        <tr
-                          key={member.id}
-                          className="hover:bg-surface-tertiary/50 transition-colors"
-                        >
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center shrink-0">
-                                <span className="text-xs font-semibold text-primary-600">
-                                  {member.name[0]?.toUpperCase()}
-                                </span>
+                <div className="grid gap-4">
+                  {members.map((member) => {
+                    const isSelf = member.id === currentUser?.id;
+                    return (
+                      <div
+                        key={member.id}
+                        className="bg-white/80 border border-gray-200/50 rounded-xl p-6 hover:shadow-md transition-all duration-200"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            {/* Avatar */}
+                            <div className="relative">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                {member.name[0]?.toUpperCase()}
                               </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">
+                              {member.role === "admin" && (
+                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
+                                  <Crown className="h-3 w-3 text-white" />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Member Info */}
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-semibold text-gray-900">
                                   {member.name}
                                   {isSelf && (
-                                    <span className="ml-1.5 text-xs text-muted">
-                                      (you)
+                                    <span className="ml-2 text-sm text-muted-foreground font-normal">
+                                      (You)
                                     </span>
                                   )}
-                                </p>
-                                <p className="text-xs text-muted truncate">
-                                  {member.email}
-                                </p>
+                                </h3>
+                                <Badge
+                                  variant={member.role === "admin" ? "primary" : "default"}
+                                  className={member.role === "admin" ? "bg-gradient-to-r from-yellow-100 to-orange-100 text-yellow-700 border-yellow-200" : ""}
+                                >
+                                  {member.role === "admin" && <Crown className="h-3 w-3 mr-1" />}
+                                  {member.role}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  <span>{member.email}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  <span>Joined {fmtDate(member.createdAt)}</span>
+                                </div>
                               </div>
                             </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Badge
-                              variant={member.role === "admin" ? "primary" : "default"}
-                            >
-                              {member.role}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground text-xs">
-                            {fmtDate(member.createdAt)}
-                          </td>
-                          <td className="py-3 px-4">
-                            {!isSelf && (
-                              <div className="flex items-center gap-1 justify-end">
-                                {/* Toggle role */}
-                                <button
-                                  onClick={() =>
-                                    void handleChangeRole(
-                                      member.id,
-                                      member.role === "admin" ? "member" : "admin",
-                                    )
-                                  }
-                                  className="p-1.5 rounded text-muted hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                                  title={`Make ${member.role === "admin" ? "member" : "admin"}`}
-                                >
-                                  <Shield className="h-3.5 w-3.5" />
-                                </button>
-                                {/* Remove */}
-                                <button
-                                  onClick={() =>
-                                    void handleRemoveMember(member.id, member.name)
-                                  }
-                                  className="p-1.5 rounded text-muted hover:text-red-600 hover:bg-red-50 transition-colors"
-                                  title="Remove member"
-                                >
-                                  <UserMinus className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+
+                          {/* Actions */}
+                          {!isSelf && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  void handleChangeRole(
+                                    member.id,
+                                    member.role === "admin" ? "member" : "admin",
+                                  )
+                                }
+                                className="hover:bg-blue-50 hover:text-blue-600"
+                                title={`Make ${member.role === "admin" ? "member" : "admin"}`}
+                              >
+                                <Shield className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void handleRemoveMember(member.id, member.name)}
+                                className="hover:bg-red-50 hover:text-red-600"
+                                title="Remove member"
+                              >
+                                <UserMinus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-            </div>
+            </CardContent>
           </Card>
 
-          {/* Pending invites */}
+          {/* Enhanced Pending Invites */}
           {invites.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Pending Invites ({invites.length})</CardTitle>
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-gray-50">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-orange-100 text-orange-600">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <span>Pending Invites ({invites.length})</span>
+                  <Badge variant="warning" className="bg-orange-100 text-orange-700">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Awaiting Response
+                  </Badge>
+                </CardTitle>
               </CardHeader>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-tertiary">
-                    <tr>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
-                        Invite
-                      </th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
-                        Role
-                      </th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
-                        Expires
-                      </th>
-                      <th className="py-3 px-4" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-light">
-                    {invites.map((invite) => (
-                      <tr
-                        key={invite.id}
-                        className="hover:bg-surface-tertiary/50 transition-colors"
-                      >
-                        <td className="py-3 px-4">
+              <CardContent>
+                <div className="grid gap-4">
+                  {invites.map((invite) => (
+                    <div
+                      key={invite.id}
+                      className="bg-white/80 border border-orange-200/50 rounded-xl p-6 hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          {/* Icon */}
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white shadow-lg">
+                            <Mail className="h-6 w-6" />
+                          </div>
+
+                          {/* Invite Info */}
                           <div>
-                            <p className="text-sm text-gray-900">
-                              {invite.email ?? (
-                                <span className="text-muted italic">Open invite</span>
-                              )}
-                            </p>
-                            <p className="text-xs text-muted">
-                              Created by {invite.creator.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-gray-900">
+                                {invite.email ?? (
+                                  <span className="text-orange-600 italic">Open invite link</span>
+                                )}
+                              </h3>
+                              <Badge
+                                variant={invite.role === "admin" ? "primary" : "default"}
+                                className={invite.role === "admin" ? "bg-gradient-to-r from-yellow-100 to-orange-100 text-yellow-700 border-yellow-200" : ""}
+                              >
+                                {invite.role === "admin" && <Crown className="h-3 w-3 mr-1" />}
+                                {invite.role}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <UserCheck className="h-3 w-3" />
+                                <span>Created by {invite.creator.name}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>Expires {fmtDate(invite.expiresAt)}</span>
+                              </div>
+                            </div>
                           </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={invite.role === "admin" ? "primary" : "default"}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleCopyInvite(invite.inviteUrl)}
+                            className="hover:bg-blue-50 hover:text-blue-600"
+                            title="Copy invite link"
                           >
-                            {invite.role}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">
-                          {fmtDate(invite.expiresAt)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1 justify-end">
-                            <button
-                              onClick={() => void handleCopyInvite(invite.inviteUrl)}
-                              className="p-1.5 rounded text-muted hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                              title="Copy invite link"
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => void handleRevokeInvite(invite.id)}
-                              className="p-1.5 rounded text-muted hover:text-red-600 hover:bg-red-50 transition-colors"
-                              title="Revoke invite"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleRevokeInvite(invite.id)}
+                            className="hover:bg-red-50 hover:text-red-600"
+                            title="Revoke invite"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
             </Card>
           )}
         </>

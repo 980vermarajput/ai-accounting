@@ -29,9 +29,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="flex h-screen bg-surface-secondary overflow-hidden">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 overflow-hidden">
       <AppNav />
-      <main className="ml-56 flex-1 overflow-y-auto custom-scrollbar">{children}</main>
+      <main className="ml-64 flex-1 overflow-y-auto custom-scrollbar">{children}</main>
     </div>
   );
 }

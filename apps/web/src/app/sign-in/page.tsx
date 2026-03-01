@@ -2,30 +2,49 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export default function SignInPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-surface-secondary">
-      <div className="w-full max-w-sm space-y-8">
-        {/* Brand */}
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gray-900 text-white text-sm font-bold flex items-center justify-center shadow-card">
-            CA
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-50 via-purple-50 to-blue-50">
+      {/* Background Effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="relative w-full max-w-md space-y-8">
+        {/* Enhanced Brand Section */}
+        <div className="flex flex-col items-center gap-6 text-center">
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-3xl blur-2xl"></div>
+            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-600 to-purple-600 text-white text-xl font-bold flex items-center justify-center shadow-2xl">
+              <span className="bg-gradient-to-br from-white to-blue-100 bg-clip-text text-transparent">
+                AI
+              </span>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">AI for Accountants</h1>
-            <p className="mt-1 text-sm text-muted">
-              Search documents, emails &amp; spreadsheets — get citation-backed answers.
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              AI Assistant
+            </h1>
+            <p className="text-lg text-gray-600 font-medium">
+              for Chartered Accountants
+            </p>
+            <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
+              Transform your practice with AI-powered document search, intelligent insights, and automated workflows
             </p>
           </div>
         </div>
 
-        {/* Sign-in card */}
-        <div className="bg-surface rounded-2xl border border-border shadow-card p-6 space-y-4">
-          <p className="text-sm text-muted-foreground text-center font-medium">
-            Sign in with your Google Workspace account
-          </p>
+        {/* Enhanced Sign-in Card */}
+        <div className="bg-white/70 backdrop-blur-sm rounded-3xl border border-white/50 shadow-2xl p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-semibold text-gray-900">Get Started</h2>
+            <p className="text-sm text-gray-600">
+              Sign in with your Google Workspace account to access your firm's AI assistant
+            </p>
+          </div>
 
           <a
             href={`${API_BASE}/api/auth/google`}
-            className="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-lg border border-border bg-surface text-sm font-medium text-gray-700 hover:bg-surface-tertiary active:bg-surface-secondary transition-colors shadow-sm"
+            className="group flex items-center justify-center gap-3 w-full px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
           >
             {/* Google logo */}
             <svg
@@ -52,18 +71,56 @@ export default function SignInPage() {
                 fill="#EA4335"
               />
             </svg>
-            Continue with Google
+            <span className="group-hover:scale-110 transition-transform">Continue with Google</span>
           </a>
 
-          <p className="text-xs text-muted-foreground text-center">
-            Only Google Workspace accounts for your CA firm are supported.
-          </p>
+          <div className="text-center space-y-3">
+            <p className="text-xs text-gray-500">
+              Secure access for Google Workspace accounts only
+            </p>
+
+            {/* Features Grid */}
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <div className="bg-blue-50/50 rounded-xl p-3 text-center">
+                <div className="w-8 h-8 bg-blue-100 rounded-full mx-auto mb-2 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <p className="text-xs font-medium text-blue-700">Smart Search</p>
+              </div>
+              <div className="bg-purple-50/50 rounded-xl p-3 text-center">
+                <div className="w-8 h-8 bg-purple-100 rounded-full mx-auto mb-2 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="text-xs font-medium text-purple-700">AI Insights</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Your data is encrypted and isolated to your firm under Indian data residency
-          standards.
-        </p>
+        {/* Enhanced Footer */}
+        <div className="text-center space-y-2">
+          <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+            <div className="flex items-center gap-1">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              <span>Encrypted</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+              </svg>
+              <span>Indian servers</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">
+            Enterprise-grade security with data residency compliance
+          </p>
+        </div>
       </div>
     </main>
   );

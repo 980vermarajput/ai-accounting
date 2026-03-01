@@ -91,25 +91,48 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <PageHeader
-        title="Clients"
-        description="Manage your client relationships and view document summaries"
-      >
-        <Button onClick={() => setShowNewClientForm(true)}>
-          <Plus className="h-4 w-4" />
-          New Client
-        </Button>
-      </PageHeader>
+    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Enhanced Header Section */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5"></div>
+        <div className="relative bg-white/80 backdrop-blur-sm border-b border-slate-200/50 px-8 py-6">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/10 rounded-xl blur-lg"></div>
+                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                  <Users className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Clients
+                </h1>
+                <p className="text-sm text-slate-600 mt-1">
+                  {clients.length > 0 ? `${clients.length} client${clients.length > 1 ? "s" : ""} in your portfolio` : "No clients yet"}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => setShowNewClientForm(true)}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+            >
+              <Plus className="h-4 w-4" />
+              New Client
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Flash message */}
       {flash && (
-        <FlashMessage
-          variant={flash.type}
-          message={flash.message}
-          className="mb-5"
-          onDismiss={() => setFlash(null)}
-        />
+        <div className="px-8 pt-4">
+          <FlashMessage
+            variant={flash.type}
+            message={flash.message}
+            onDismiss={() => setFlash(null)}
+          />
+        </div>
       )}
 
       {/* New Client Form Modal */}
@@ -174,11 +197,11 @@ export default function ClientsPage() {
       </Modal>
 
       {/* Clients List */}
-      <Card className="overflow-hidden">
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-8">
         {isLoading ? (
-          <div className="px-6 py-12 flex flex-col items-center justify-center gap-2 text-muted text-sm">
+          <div className="flex items-center justify-center py-20 gap-3">
             <Spinner size="md" />
-            Loading clients...
+            <span className="text-sm text-slate-600">Loading clients…</span>
           </div>
         ) : clients.length === 0 ? (
           <EmptyState
@@ -186,55 +209,59 @@ export default function ClientsPage() {
             title="No clients yet"
             description="Create your first client to start organizing documents and communications."
             action={
-              <Button onClick={() => setShowNewClientForm(true)}>
+              <Button
+                onClick={() => setShowNewClientForm(true)}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+              >
                 <Plus className="h-4 w-4" />
                 Create First Client
               </Button>
             }
+            className="py-20"
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg overflow-hidden my-6">
             <table className="w-full">
-              <thead className="bg-surface-tertiary">
-                <tr className="text-left text-xs text-muted uppercase tracking-wide">
-                  <th className="px-6 py-3 font-medium">Client</th>
-                  <th className="px-6 py-3 font-medium">Identifier</th>
-                  <th className="px-6 py-3 font-medium">Email Domain</th>
-                  <th className="px-6 py-3 font-medium">Created</th>
-                  <th className="px-6 py-3 font-medium">Actions</th>
+              <thead>
+                <tr className="border-b border-slate-200/50 bg-slate-50/50">
+                  <th className="text-left px-6 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Client</th>
+                  <th className="text-left px-6 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Identifier</th>
+                  <th className="text-left px-6 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Email Domain</th>
+                  <th className="text-left px-6 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Created</th>
+                  <th className="text-left px-6 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border-light">
+              <tbody className="divide-y divide-slate-200/30">
                 {clients.map((client) => (
                   <tr
                     key={client.id}
-                    className="hover:bg-surface-tertiary/50 transition-colors"
+                    className="hover:bg-slate-50/30 transition-colors duration-200"
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center shrink-0">
-                          <span className="text-primary-600 font-semibold text-sm">
+                        <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center shrink-0 border border-blue-200/50">
+                          <span className="text-blue-600 font-semibold text-sm">
                             {client.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900">{client.name}</div>
+                          <div className="font-medium text-slate-800">{client.name}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground font-mono">
+                    <td className="px-6 py-4 text-sm text-slate-600 font-mono">
                       {client.identifier}
                     </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">
-                      {client.emailDomain || "—"}
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {client.emailDomain || <span className="text-slate-400">—</span>}
                     </td>
-                    <td className="px-6 py-4 text-sm text-muted">
+                    <td className="px-6 py-4 text-sm text-slate-600">
                       {fmtDate(client.createdAt)}
                     </td>
                     <td className="px-6 py-4">
                       <Link
                         href={`/clients/${client.id}`}
-                        className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 text-sm font-medium"
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
                       >
                         View Summary
                         <ArrowRight className="h-3.5 w-3.5" />
@@ -246,13 +273,7 @@ export default function ClientsPage() {
             </table>
           </div>
         )}
-      </Card>
-
-      {clients.length > 0 && (
-        <div className="mt-6 text-center text-sm text-muted">
-          {clients.length} client{clients.length === 1 ? "" : "s"} total
-        </div>
-      )}
+      </div>
     </div>
   );
 }

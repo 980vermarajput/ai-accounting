@@ -478,9 +478,9 @@ export default function ChatPage() {
   return (
     <div className="flex h-full">
       {/* ── History sidebar ─────────────────────────────────── */}
-      <aside className="w-60 shrink-0 border-r border-border bg-white flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b border-border-light">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <aside className="w-60 shrink-0 border-r border-slate-200 bg-slate-50/50 flex flex-col overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200/50 bg-white/60">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
             Recent queries
           </h2>
         </div>
@@ -491,7 +491,7 @@ export default function ChatPage() {
               <Spinner size="sm" />
             </div>
           ) : history.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8 px-4">
+            <p className="text-xs text-slate-500 text-center py-8 px-4">
               No queries yet. Ask something below!
             </p>
           ) : (
@@ -499,12 +499,12 @@ export default function ChatPage() {
               <button
                 key={item.id}
                 onClick={() => setInput(item.queryText)}
-                className="w-full text-left px-4 py-2.5 hover:bg-surface-tertiary transition-colors group"
+                className="w-full text-left px-4 py-2.5 hover:bg-white/60 hover:shadow-sm transition-all group rounded-lg mx-2"
               >
-                <p className="text-xs text-gray-600 leading-snug line-clamp-2 group-hover:text-gray-900">
+                <p className="text-xs text-slate-700 leading-snug line-clamp-2 group-hover:text-slate-900">
                   {item.queryText}
                 </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   {fmtDate(item.createdAt)}
                 </p>
               </button>
@@ -512,13 +512,13 @@ export default function ChatPage() {
           )}
         </div>
 
-        <div className="border-t border-border-light px-4 py-3">
+        <div className="border-t border-slate-200/50 px-4 py-3 bg-white/40">
           <button
             onClick={() => {
               setMessages([]);
               setSessionId(null);
             }}
-            className="flex items-center gap-1.5 text-xs text-muted hover:text-gray-700 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors"
           >
             <MessageSquarePlus className="h-3.5 w-3.5" />
             New conversation

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui";
 import {
   Calendar,
+  CalendarClock,
   List,
   ChevronLeft,
   ChevronRight,
@@ -268,86 +269,103 @@ export default function DeadlinesPage() {
   }, [selectedDate, calendarData]);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Header row */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Compliance Deadlines</h1>
-          <p className="mt-1 text-sm text-muted">
-            Automatically extracted compliance deadlines from your documents
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* View toggle */}
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            <button
-              onClick={() => setView("calendar")}
-              className={cn(
-                "px-3 py-1.5 text-sm flex items-center gap-1.5 transition-colors",
-                view === "calendar"
-                  ? "bg-primary-600 text-white"
-                  : "bg-white text-muted hover:text-gray-700 hover:bg-surface-tertiary",
-              )}
-            >
-              <Calendar className="h-3.5 w-3.5" />
-              Calendar
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={cn(
-                "px-3 py-1.5 text-sm flex items-center gap-1.5 transition-colors border-l border-border",
-                view === "list"
-                  ? "bg-primary-600 text-white"
-                  : "bg-white text-muted hover:text-gray-700 hover:bg-surface-tertiary",
-              )}
-            >
-              <List className="h-3.5 w-3.5" />
-              List
-            </button>
-          </div>
+    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Enhanced Header Section */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5"></div>
+        <div className="relative bg-white/80 backdrop-blur-sm border-b border-slate-200/50 px-8 py-6">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/10 rounded-xl blur-lg"></div>
+                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                  <CalendarClock className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Compliance Deadlines
+                </h1>
+                <p className="text-sm text-slate-600 mt-1">
+                  Automatically extracted compliance deadlines from your documents
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* View toggle */}
+              <div className="flex rounded-xl border border-slate-200 overflow-hidden bg-white/60">
+                <button
+                  onClick={() => setView("calendar")}
+                  className={cn(
+                    "px-4 py-2 text-sm flex items-center gap-1.5 transition-all duration-200",
+                    view === "calendar"
+                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm"
+                      : "bg-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-50",
+                  )}
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  Calendar
+                </button>
+                <button
+                  onClick={() => setView("list")}
+                  className={cn(
+                    "px-4 py-2 text-sm flex items-center gap-1.5 transition-all duration-200 border-l border-slate-200",
+                    view === "list"
+                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm"
+                      : "bg-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-50",
+                  )}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  List
+                </button>
+              </div>
 
-          {/* ICS export */}
-          <Button
-            onClick={handleExport}
-            variant="secondary"
-            size="sm"
-            className="flex items-center gap-1.5"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export ICS
-          </Button>
+              {/* ICS export */}
+              <Button
+                onClick={handleExport}
+                variant="secondary"
+                size="sm"
+                className="bg-white/60 hover:bg-white/80 border-slate-200 hover:border-slate-300 transition-all duration-200"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export ICS
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Client filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <label
-          htmlFor="client-filter"
-          className="text-sm font-medium text-gray-700 shrink-0"
-        >
-          Filter by client:
-        </label>
-        <select
-          id="client-filter"
-          value={clientFilter}
-          onChange={(e) => {
-            setClientFilter(e.target.value);
-            setSelectedDate(null);
-          }}
-          className="border border-border bg-white rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 hover:border-border-heavy transition-colors min-w-[200px]"
-        >
-          <option value="">All clients</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        {clientFilter && (
-          <span className="text-xs text-muted">
-            {listData.length} deadline{listData.length !== 1 ? "s" : ""} found
-          </span>
-        )}
+      <div className="px-8 py-4 bg-white/50 border-b border-slate-200/50">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <label
+            htmlFor="client-filter"
+            className="text-sm font-medium text-slate-700 shrink-0"
+          >
+            Filter by client:
+          </label>
+          <select
+            id="client-filter"
+            value={clientFilter}
+            onChange={(e) => {
+              setClientFilter(e.target.value);
+              setSelectedDate(null);
+            }}
+            className="border border-slate-200 bg-white/80 rounded-xl px-4 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 hover:border-slate-300 transition-all duration-200 min-w-[200px]"
+          >
+            <option value="">All clients</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          {clientFilter && (
+            <span className="text-xs text-slate-600">
+              {listData.length} deadline{listData.length !== 1 ? "s" : ""} found
+            </span>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -358,40 +376,37 @@ export default function DeadlinesPage() {
         </Card>
       )}
 
-      {loading ? (
-        <Card>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Spinner size="md" />
-              <span className="text-sm text-muted">Loading deadlines…</span>
-            </div>
-          </CardContent>
-        </Card>
-      ) : view === "calendar" ? (
-        /* ─── Calendar View ─── */
-        <div className="flex flex-col lg:flex-row gap-6">
-          <div className="flex-1">
-            <Card>
-              <CardHeader>
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-8">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <Spinner size="md" />
+            <span className="text-sm text-slate-600">Loading deadlines…</span>
+          </div>
+        ) : view === "calendar" ? (
+          /* ─── Calendar View ─── */
+          <div className="flex flex-col lg:flex-row gap-6 py-6">
+            <div className="flex-1">
+            <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg">
+              <div className="px-6 py-4 border-b border-slate-200/50">
                 <div className="flex items-center justify-between">
-                  <Button onClick={prevMonth} variant="ghost" size="sm" className="p-2">
+                  <Button onClick={prevMonth} variant="ghost" size="sm" className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100">
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
-                  <CardTitle className="text-base font-semibold">
+                  <h3 className="text-lg font-semibold text-slate-800">
                     {MONTH_NAMES[month - 1]} {year}
-                  </CardTitle>
-                  <Button onClick={nextMonth} variant="ghost" size="sm" className="p-2">
+                  </h3>
+                  <Button onClick={nextMonth} variant="ghost" size="sm" className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100">
                     <ChevronRight className="h-5 w-5" />
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="px-3 sm:px-6">
+              </div>
+              <div className="px-3 sm:px-6 py-4">
                 {/* Day headers */}
                 <div className="grid grid-cols-7 gap-px mb-1">
                   {DAY_NAMES.map((d) => (
                     <div
                       key={d}
-                      className="text-center text-xs font-medium text-muted py-2"
+                      className="text-center text-xs font-medium text-slate-600 py-2"
                     >
                       {d}
                     </div>
@@ -458,67 +473,67 @@ export default function DeadlinesPage() {
                 </div>
 
                 {/* Legend */}
-                <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border-light">
-                  <div className="flex items-center gap-1.5 text-xs text-muted">
+                <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-200/50">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
                     <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
                     Past due
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
                     <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />
                     Next 7 days
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
                     <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
                     Future
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
+            </div>
 
           {/* Side panel */}
           <div className="w-full lg:w-80 shrink-0">
-            <Card className="h-fit">
-              <CardHeader>
+            <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg">
+              <div className="px-6 py-4 border-b border-slate-200/50">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">
+                  <h3 className="text-base font-semibold text-slate-800">
                     {selectedDate ? (
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-primary-500" />
+                        <Calendar className="h-4 w-4 text-blue-500" />
                         {fmtDate(selectedDate)}
                       </div>
                     ) : (
                       "Select a date"
                     )}
-                  </CardTitle>
+                  </h3>
                   {selectedDate && (
                     <Button
                       onClick={() => setSelectedDate(null)}
                       variant="ghost"
                       size="sm"
-                      className="text-muted hover:text-gray-700 p-1 h-auto"
+                      className="text-slate-600 hover:text-slate-800 p-1 h-auto"
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
-              </CardHeader>
-              <CardContent>
+              </div>
+              <div className="p-6">
                 {!selectedDate ? (
                   <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-border-heavy mx-auto mb-3" />
-                    <p className="text-sm text-muted">
+                    <Calendar className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+                    <p className="text-sm text-slate-600">
                       Click a date on the calendar to view deadlines
                     </p>
                   </div>
                 ) : selectedDeadlines.length === 0 ? (
                   <div className="text-center py-8">
                     <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
-                    <p className="text-sm text-muted">No deadlines on this date</p>
+                    <p className="text-sm text-slate-600">No deadlines on this date</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-xs text-muted font-medium uppercase tracking-wider">
+                    <p className="text-xs text-slate-600 font-medium uppercase tracking-wider">
                       {selectedDeadlines.length} deadline
                       {selectedDeadlines.length !== 1 ? "s" : ""}
                     </p>
@@ -527,14 +542,13 @@ export default function DeadlinesPage() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
-        </div>
-      ) : (
-        /* ─── List View ─── */
-        <Card>
-          <CardContent>
+          </div>
+        ) : (
+          /* ─── List View ─── */
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg my-6">
             {listData.length === 0 ? (
               <EmptyState
                 icon={<CheckCircle className="h-8 w-8 text-green-500" />}
@@ -545,26 +559,26 @@ export default function DeadlinesPage() {
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-surface-tertiary">
-                      <tr>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
+                    <thead>
+                      <tr className="border-b border-slate-200/50 bg-slate-50/50">
+                        <th className="text-left py-4 px-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                           Date
                         </th>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
+                        <th className="text-left py-4 px-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                           Description
                         </th>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
+                        <th className="text-left py-4 px-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                           Client
                         </th>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
+                        <th className="text-left py-4 px-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                           Source
                         </th>
-                        <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wide">
+                        <th className="text-left py-4 px-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                           Confidence
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border-light">
+                    <tbody className="divide-y divide-slate-200/30">
                       {listData.map((dl) => {
                         const dateStr =
                           typeof dl.date === "string"
@@ -573,29 +587,29 @@ export default function DeadlinesPage() {
                         return (
                           <tr
                             key={dl.id}
-                            className="hover:bg-surface-tertiary/50 transition-colors"
+                            className="hover:bg-slate-50/30 transition-colors duration-200"
                           >
                             <td
                               className={cn(
-                                "py-3 px-4 font-medium",
+                                "py-4 px-4 font-medium",
                                 getDeadlineTextColour(dateStr),
                               )}
                             >
                               {fmtDate(dateStr)}
                             </td>
-                            <td className="py-3 px-4 text-gray-900">{dl.description}</td>
-                            <td className="py-3 px-4 text-muted-foreground">
+                            <td className="py-4 px-4 text-slate-800">{dl.description}</td>
+                            <td className="py-4 px-4 text-slate-600">
                               {dl.client?.name ?? "—"}
                             </td>
-                            <td className="py-3 px-4 text-muted-foreground">
+                            <td className="py-4 px-4 text-slate-600">
                               <div className="flex items-center gap-1.5">
-                                <FileText className="h-3.5 w-3.5 text-muted shrink-0" />
+                                <FileText className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                                 <span className="truncate max-w-[200px]">
                                   {dl.document?.filename ?? "—"}
                                 </span>
                               </div>
                             </td>
-                            <td className="py-3 px-4">
+                            <td className="py-4 px-4">
                               {getConfidenceBadge(dl.confidence)}
                             </td>
                           </tr>
@@ -634,9 +648,9 @@ export default function DeadlinesPage() {
                 )}
               </>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

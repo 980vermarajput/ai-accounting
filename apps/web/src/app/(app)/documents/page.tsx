@@ -159,44 +159,61 @@ export default function DocumentsPage() {
   );
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div className="border-b border-border bg-white px-6 py-4">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <PageHeader
-            title="Documents"
-            description={
-              total > 0 ? `${total} document${total > 1 ? "s" : ""}` : "No documents yet"
-            }
-            className="mb-0"
-          />
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={syncingGmail}
-              onClick={() => void triggerSync("gmail")}
-            >
-              <Mail className="h-3.5 w-3.5" /> Sync Gmail
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={syncingDrive}
-              onClick={() => void triggerSync("drive")}
-            >
-              <HardDrive className="h-3.5 w-3.5" /> Sync Drive
-            </Button>
+    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Enhanced Header Section */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5"></div>
+        <div className="relative bg-white/80 backdrop-blur-sm border-b border-slate-200/50 px-8 py-6">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/10 rounded-xl blur-lg"></div>
+                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                  <FileText className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Documents
+                </h1>
+                <p className="text-sm text-slate-600 mt-1">
+                  {total > 0 ? `${total.toLocaleString()} document${total > 1 ? "s" : ""} synced` : "No documents yet"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={syncingGmail}
+                onClick={() => void triggerSync("gmail")}
+                className="bg-white/60 hover:bg-white/80 border-slate-200 hover:border-slate-300 transition-all duration-200"
+              >
+                <Mail className="h-4 w-4" />
+                Sync Gmail
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={syncingDrive}
+                onClick={() => void triggerSync("drive")}
+                className="bg-white/60 hover:bg-white/80 border-slate-200 hover:border-slate-300 transition-all duration-200"
+              >
+                <HardDrive className="h-4 w-4" />
+                Sync Drive
+              </Button>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Active sync banner */}
-        {runningJobs.length > 0 && (
-          <div className="mt-3">
-            <FlashMessage
-              variant="warning"
-              message={
-                runningJobs
+      {/* Active sync banner */}
+      {runningJobs.length > 0 && (
+        <div className="px-8 pt-4">
+          <FlashMessage
+            variant="warning"
+            message={
+              runningJobs
                   .map(
                     (j) =>
                       `${j.type === "gmail" ? "Gmail" : "Drive"}: ${j.documentsProcessed}/${j.documentsFound} docs`,
@@ -207,22 +224,23 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        {syncMessage && (
-          <div className="mt-3">
-            <FlashMessage
-              variant={syncMessage.type === "success" ? "success" : "error"}
-              message={syncMessage.text}
-              onDismiss={() => setSyncMessage(null)}
-            />
-          </div>
-        )}
+      {syncMessage && (
+        <div className="px-8 pt-4">
+          <FlashMessage
+            variant={syncMessage.type === "success" ? "success" : "error"}
+            message={syncMessage.text}
+            onDismiss={() => setSyncMessage(null)}
+          />
+        </div>
+      )}
 
-        {/* Filters */}
-        <div className="mt-3 flex items-center gap-3">
+      {/* Enhanced Filters */}
+      <div className="px-8 py-6 border-b border-slate-200/50 bg-white/50">
+        <div className="flex items-center gap-4">
           <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
-            className="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
+            className="text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-white/80 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
           >
             <option value="">All sources</option>
             <option value="gmail">Gmail</option>
@@ -232,7 +250,7 @@ export default function DocumentsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
+            className="text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-white/80 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
           >
             <option value="">All statuses</option>
             <option value="ready">Ready</option>
@@ -254,12 +272,12 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* ── Table ──────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      {/* ── Content Area ────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-8">
         {isLoading ? (
           <div className="flex items-center justify-center py-20 gap-3">
             <Spinner />
-            <span className="text-sm text-muted">Loading documents…</span>
+            <span className="text-sm text-slate-600">Loading documents…</span>
           </div>
         ) : documents.length === 0 ? (
           <EmptyState
@@ -273,95 +291,97 @@ export default function DocumentsPage() {
             className="py-20"
           />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-tertiary">
-                <th className="text-left px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Filename
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Source
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Status
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Date
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Excerpt
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-light">
-              {documents.map((doc) => (
-                <tr
-                  key={doc.id}
-                  className="hover:bg-surface-tertiary/50 transition-colors"
-                >
-                  <td className="px-6 py-3">
-                    <span className="font-medium text-gray-800 truncate max-w-xs block text-sm">
-                      {doc.filename}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground font-mono">
-                      {doc.mimeType}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="flex items-center gap-1.5 text-xs text-muted">
-                      {SOURCE_ICON[doc.source]}
-                      {SOURCE_LABEL[doc.source]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={doc.status} />
-                    {doc.errorMessage && (
-                      <p
-                        className="text-[11px] text-red-500 mt-0.5 truncate max-w-[140px]"
-                        title={doc.errorMessage}
-                      >
-                        {doc.errorMessage}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                    {fmtDate(doc.sourceDate)}
-                  </td>
-                  <td className="px-4 py-3 max-w-xs">
-                    {doc.textExcerpt ? (
-                      <p className="text-xs text-muted line-clamp-2 leading-relaxed">
-                        {doc.textExcerpt}
-                      </p>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {doc.source === "gmail" && doc.gmailThreadId ? (
-                      <button
-                        onClick={() => setSelectedThreadId(doc.gmailThreadId || null)}
-                        className="text-xs text-primary-600 hover:text-primary-700 font-medium hover:underline"
-                      >
-                        View Thread
-                      </button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg overflow-hidden my-6">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200/50 bg-slate-50/50">
+                  <th className="text-left px-6 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    Filename
+                  </th>
+                  <th className="text-left px-4 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    Source
+                  </th>
+                  <th className="text-left px-4 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    Status
+                  </th>
+                  <th className="text-left px-4 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    Date
+                  </th>
+                  <th className="text-left px-4 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    Excerpt
+                  </th>
+                  <th className="text-left px-4 py-4 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-200/30">
+                {documents.map((doc) => (
+                  <tr
+                    key={doc.id}
+                    className="hover:bg-slate-50/30 transition-colors duration-200"
+                  >
+                    <td className="px-6 py-4">
+                      <span className="font-medium text-slate-800 truncate max-w-xs block text-sm">
+                        {doc.filename}
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-mono">
+                        {doc.mimeType}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                        {SOURCE_ICON[doc.source]}
+                        {SOURCE_LABEL[doc.source]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <StatusBadge status={doc.status} />
+                      {doc.errorMessage && (
+                        <p
+                          className="text-[11px] text-red-500 mt-0.5 truncate max-w-[140px]"
+                          title={doc.errorMessage}
+                        >
+                          {doc.errorMessage}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-xs text-slate-600 whitespace-nowrap">
+                      {fmtDate(doc.sourceDate)}
+                    </td>
+                    <td className="px-4 py-4 max-w-xs">
+                      {doc.textExcerpt ? (
+                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                          {doc.textExcerpt}
+                        </p>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      {doc.source === "gmail" && doc.gmailThreadId ? (
+                        <button
+                          onClick={() => setSelectedThreadId(doc.gmailThreadId || null)}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors"
+                        >
+                          View Thread
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* ── Pagination ─────────────────────────────────────── */}
       {totalPages > 1 && (
-        <div className="border-t border-border bg-white px-6 py-3 flex items-center justify-between">
-          <p className="text-xs text-muted">
+        <div className="border-t border-slate-200/50 bg-white/60 backdrop-blur-sm px-8 py-4 flex items-center justify-between">
+          <p className="text-xs text-slate-600">
             Page {page} of {totalPages} · {total} total
           </p>
           <div className="flex items-center gap-2">
@@ -370,6 +390,7 @@ export default function DocumentsPage() {
               size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
+              className="bg-white/60 hover:bg-white/80 border-slate-200 hover:border-slate-300"
             >
               <ChevronLeft className="h-3.5 w-3.5" /> Prev
             </Button>
@@ -378,6 +399,7 @@ export default function DocumentsPage() {
               size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
+              className="bg-white/60 hover:bg-white/80 border-slate-200 hover:border-slate-300"
             >
               Next <ChevronRight className="h-3.5 w-3.5" />
             </Button>

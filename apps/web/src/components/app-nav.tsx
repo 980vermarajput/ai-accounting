@@ -55,22 +55,29 @@ export function AppNav() {
   }, [fetchUnreadCount]);
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-56 bg-gray-900 flex flex-col z-10">
-      {/* Logo + firm name */}
-      <div className="h-14 flex items-center gap-3 px-4 border-b border-gray-800">
-        <div className="w-8 h-8 rounded-lg bg-primary-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-          CA
+    <aside className="fixed inset-y-0 left-0 w-64 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col z-10 border-r border-slate-700/50">
+      {/* Enhanced Logo + firm name */}
+      <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-transparent">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl blur-sm"></div>
+          <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 text-white text-sm font-bold flex items-center justify-center shadow-lg">
+            AI
+          </div>
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-100 truncate">
+          <p className="text-sm font-semibold text-slate-100 truncate">
             {user?.firm?.name ?? "…"}
           </p>
-          <p className="text-[11px] text-gray-500 capitalize">{user?.role}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] text-slate-400 capitalize">{user?.role}</p>
+            <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></div>
+            <p className="text-[11px] text-emerald-400 font-medium">Online</p>
+          </div>
         </div>
       </div>
 
-      {/* Navigation links */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      {/* Enhanced Navigation */}
+      <nav className="flex-1 px-4 py-6 space-y-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
@@ -78,16 +85,21 @@ export function AppNav() {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                "group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30",
                 active
-                  ? "bg-gray-800 text-white"
-                  : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200",
+                  ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-blue-500/30 shadow-lg backdrop-blur-sm"
+                  : "text-slate-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-1 border border-transparent",
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <Icon className={cn(
+                "h-5 w-5 shrink-0 transition-all duration-200",
+                active
+                  ? "text-blue-400 drop-shadow-sm"
+                  : "text-slate-400 group-hover:text-slate-200"
+              )} />
               {label}
               {href === "/dashboard" && unreadAlerts > 0 && (
-                <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-gradient-to-r from-red-500 to-red-600 rounded-full shadow-lg animate-pulse">
                   {unreadAlerts > 99 ? "99+" : unreadAlerts}
                 </span>
               )}
@@ -95,65 +107,85 @@ export function AppNav() {
           );
         })}
 
-        {/* Team settings — admin only */}
-        {user?.role === "admin" &&
-          (() => {
+        {/* Settings Section */}
+        <div className="pt-4">
+          <div className="px-4 pb-2">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Settings</h3>
+          </div>
+
+          {/* Team settings — admin only */}
+          {user?.role === "admin" &&
+            (() => {
+              const active =
+                pathname === "/settings/team" || pathname.startsWith("/settings/team/");
+              return (
+                <Link
+                  href="/settings/team"
+                  className={cn(
+                    "group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30",
+                    active
+                      ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-blue-500/30 shadow-lg backdrop-blur-sm"
+                      : "text-slate-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-1 border border-transparent",
+                  )}
+                >
+                  <UserPlus2 className={cn(
+                    "h-5 w-5 shrink-0 transition-all duration-200",
+                    active
+                      ? "text-blue-400 drop-shadow-sm"
+                      : "text-slate-400 group-hover:text-slate-200"
+                  )} />
+                  Team
+                </Link>
+              );
+            })()}
+
+          {/* Telegram settings — all users */}
+          {(() => {
             const active =
-              pathname === "/settings/team" || pathname.startsWith("/settings/team/");
+              pathname === "/settings/telegram" ||
+              pathname.startsWith("/settings/telegram/");
             return (
               <Link
-                href="/settings/team"
+                href="/settings/telegram"
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  "group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30",
                   active
-                    ? "bg-gray-800 text-white"
-                    : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200",
+                    ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-blue-500/30 shadow-lg backdrop-blur-sm"
+                    : "text-slate-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-1 border border-transparent",
                 )}
               >
-                <UserPlus2 className="h-4 w-4 shrink-0" />
-                Team
+                <Send className={cn(
+                  "h-5 w-5 shrink-0 transition-all duration-200",
+                  active
+                    ? "text-blue-400 drop-shadow-sm"
+                    : "text-slate-400 group-hover:text-slate-200"
+                )} />
+                Telegram
               </Link>
             );
           })()}
-
-        {/* Telegram settings — all users */}
-        {(() => {
-          const active =
-            pathname === "/settings/telegram" ||
-            pathname.startsWith("/settings/telegram/");
-          return (
-            <Link
-              href="/settings/telegram"
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                active
-                  ? "bg-gray-800 text-white"
-                  : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200",
-              )}
-            >
-              <Send className="h-4 w-4 shrink-0" />
-              Telegram
-            </Link>
-          );
-        })()}
+        </div>
       </nav>
 
-      {/* User info + logout */}
-      <div className="border-t border-gray-800 p-4 space-y-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-full bg-gray-700 text-gray-300 text-xs font-bold flex items-center justify-center shrink-0">
-            {user?.name?.[0]?.toUpperCase() ?? "?"}
+      {/* Enhanced User Section */}
+      <div className="border-t border-slate-700/50 p-6 bg-gradient-to-r from-slate-800/30 to-transparent">
+        <div className="flex items-center gap-3 min-w-0 mb-4">
+          <div className="relative">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-bold flex items-center justify-center shadow-lg">
+              {user?.name?.[0]?.toUpperCase() ?? "?"}
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900"></div>
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-300 truncate">{user?.name}</p>
-            <p className="text-[11px] text-gray-500 truncate">{user?.email}</p>
+            <p className="text-sm font-medium text-slate-200 truncate">{user?.name}</p>
+            <p className="text-xs text-slate-400 truncate">{user?.email}</p>
           </div>
         </div>
         <button
           onClick={() => void logout()}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 transition-colors"
+          className="group flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
         >
-          <LogOut className="h-3 w-3" />
+          <LogOut className="h-4 w-4 group-hover:rotate-6 transition-transform" />
           Sign out
         </button>
       </div>

@@ -23,6 +23,9 @@ import {
   Zap,
   Eye,
   ShieldCheck,
+  Activity,
+  BarChart3,
+  Shield,
 } from "lucide-react";
 import type { ApiResponse, CommandCentreResponse, Alert } from "@ai-accounting/shared";
 
@@ -128,62 +131,133 @@ export default function DashboardPage() {
   if (!data) return null;
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Command Centre</h1>
-          <p className="text-sm text-muted mt-0.5">Your daily firm overview and alerts</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-muted">
-            <Zap className="h-3.5 w-3.5" />
-            <span>
-              {data.tokenUsage.today.toLocaleString()} /{" "}
-              {data.tokenUsage.cap.toLocaleString()} tokens
-            </span>
+    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+      {/* Enhanced Header */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-3xl blur-3xl"></div>
+        <div className="relative bg-white/50 backdrop-blur-sm rounded-2xl border border-white/20 p-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl"></div>
+                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
+                  <Activity className="h-8 w-8 text-white" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Command Centre
+                </h1>
+                <p className="text-lg text-muted-foreground mt-1">
+                  Real-time firm overview and intelligent alerts
+                </p>
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Activity className="h-4 w-4" />
+                    <span>Live monitoring</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>AI insights</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Shield className="h-4 w-4" />
+                    <span>Proactive alerts</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              {/* Token Usage */}
+              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/50">
+                <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                  <Zap className="h-4 w-4" />
+                  <span>Token Usage</span>
+                </div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {data.tokenUsage.today.toLocaleString()} / {data.tokenUsage.cap.toLocaleString()}
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                  <div
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, (data.tokenUsage.today / data.tokenUsage.cap) * 100)}%`
+                    }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Alert Badge */}
+              {data.unreadAlertCount > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <Badge variant="danger" className="animate-pulse">
+                    <Bell className="h-3 w-3 mr-1" />
+                    {data.unreadAlertCount} unread alert{data.unreadAlertCount !== 1 ? "s" : ""}
+                  </Badge>
+                </div>
+              )}
+            </div>
           </div>
-          {data.unreadAlertCount > 0 && (
-            <Badge variant="danger">
-              {data.unreadAlertCount} unread alert
-              {data.unreadAlertCount !== 1 ? "s" : ""}
-            </Badge>
-          )}
         </div>
       </div>
 
-      {/* ─── Daily Briefing Card ──────────────────────────── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-primary-600" />
-          <CardTitle>Daily Briefing</CardTitle>
-          {data.briefing && (
-            <span className="ml-auto text-xs text-muted">
-              {fmtDate(data.briefing.date)}
-            </span>
-          )}
+      {/* Enhanced Daily Briefing Card */}
+      <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-blue-50/30">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <span>Daily Briefing</span>
+            </div>
+            {data.briefing && (
+              <Badge variant="success" className="bg-green-100 text-green-700 border-green-200">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                {fmtDate(data.briefing.date)}
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {data.briefing ? (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-                {data.briefing.summary}
+            <div className="space-y-4">
+              {/* AI Generated Summary */}
+              <div className="bg-white/60 rounded-xl p-6 border border-white/50">
+                <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                  {data.briefing.summary}
+                </div>
               </div>
-              <div className="flex gap-4 text-xs text-muted pt-2 border-t border-border-light">
-                <span className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" />
-                  {data.briefing.clientCount} clients
-                </span>
-                <span className="flex items-center gap-1">
-                  <Bell className="h-3.5 w-3.5" />
-                  {data.briefing.alertCount} alerts
-                </span>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-blue-50 rounded-xl p-4 text-center">
+                  <Users className="h-6 w-6 text-blue-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-blue-900">{data.briefing.clientCount}</div>
+                  <div className="text-sm text-blue-600">Clients</div>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-4 text-center">
+                  <Bell className="h-6 w-6 text-amber-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-amber-900">{data.briefing.alertCount}</div>
+                  <div className="text-sm text-amber-600">Alerts</div>
+                </div>
+                <div className="bg-purple-50 rounded-xl p-4 text-center">
+                  <BarChart3 className="h-6 w-6 text-purple-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-purple-900">{data.recentActivity.length}</div>
+                  <div className="text-sm text-purple-600">Active</div>
+                </div>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted">
-              No briefing generated yet today. It will be ready at 7:00 AM IST.
-            </p>
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Clock className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Briefing Pending</h3>
+              <p className="text-sm text-muted-foreground">
+                Your daily AI briefing will be ready at 7:00 AM IST
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
