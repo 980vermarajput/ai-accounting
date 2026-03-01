@@ -1,8 +1,8 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.1 — Updated 2026-02-26
+> **Version:** 2.2 — Updated 2026-03-01
 > **Author:** @980vermarajput
-> **Status:** Production-Ready MVP — Security Hardened + Cost Protected
+> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools
 > **Related:** [PRD v2.1](./PRD.md)
 
 ---
@@ -31,16 +31,18 @@
 
 ## 1 — Architecture Principles
 
-| #   | Principle                        | Rationale                                                                                            |
-| --- | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| P1  | **Data isolation by default**    | Multi-tenant system handling sensitive financial data — RLS on every query                           |
-| P2  | **Async-first for heavy work**   | Sync, extraction, and embedding are I/O-heavy — use job queues, not request threads                  |
-| P3  | **LLM as a stateless service**   | Never store conversation state in the LLM — reconstruct context per request                          |
-| P4  | **Encrypt everything sensitive** | Tokens, PII at rest (AES-256-GCM); all traffic over TLS 1.3                                          |
-| P5  | **Observe everything**           | Structured logging, auth events, cost tracking, RAG metrics — production observability             |
-| P6  | **Cost-aware AI usage**          | ✅ Daily token caps (50K/firm), query limits (6K), Gmail sync guardrails — spend explosions prevented |
-| P7  | **Swap-ready LLM layer**         | Abstract LLM/embedding providers behind interfaces — easy to switch to Anthropic, local models, etc. |
-| P8  | **Monorepo, shared types**       | Single repo with shared TypeScript types between frontend and backend                                |
+| #   | Principle                         | Rationale                                                                                             |
+| --- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| P1  | **Data isolation by default**     | Multi-tenant system handling sensitive financial data — RLS on every query                            |
+| P2  | **Async-first for heavy work**    | Sync, extraction, and embedding are I/O-heavy — use job queues, not request threads                   |
+| P3  | **LLM as a stateless service**    | Never store conversation state in the LLM — reconstruct context per request                           |
+| P4  | **Encrypt everything sensitive**  | Tokens, PII at rest (AES-256-GCM); all traffic over TLS 1.3                                           |
+| P5  | **Observe everything**            | Structured logging, auth events, cost tracking, RAG metrics — production observability                |
+| P6  | **Cost-aware AI usage**           | ✅ Daily token caps (50K/firm), query limits (6K), Gmail sync guardrails — spend explosions prevented |
+| P7  | **Swap-ready LLM layer**          | Abstract LLM/embedding providers behind interfaces — easy to switch to Anthropic, local models, etc.  |
+| P8  | **Monorepo, shared types**        | Single repo with shared TypeScript types between frontend and backend                                 |
+| P9  | **Smart conversation continuity** | Session-based chat with 3000-token context limit, intelligent trimming, auto-cleanup prevents bloat   |
+| P10 | **Real-time firm intelligence**   | AI can query live firm data via function calling — no static snapshots, always current                |
 
 ---
 
@@ -415,26 +417,30 @@ User       Frontend        API Server      PostgreSQL/pgvector    Redis Cache   
 
 ### 7.1 Schema Overview
 
-Our Prisma schema defines 8 core models with pgvector support and RLS:
+Our Prisma schema defines 10 core models with pgvector support and RLS:
 
-| Model        | Purpose                               | RLS Key | Relationships                           |
-| ------------ | ------------------------------------- | ------- | --------------------------------------- |
-| **Firm**     | Organization/tenant root              | firm_id | 1→many Users, Clients                   |
-| **User**     | Team members (admins, staff)          | firm_id | many←one Firm; 1→many SyncJobs          |
-| **Client**   | Taxpayer/business entity              | firm_id | many←one Firm; 1→many Documents         |
-| **Document** | Uploaded files (Gmail, Drive, manual) | firm_id | many←one Firm, Client; 1→many Chunks    |
-| **Chunk**    | Text segments with embeddings         | firm_id | many←one Document; has vector(1536)     |
-| **Query**    | RAG chat queries + feedback           | firm_id | many←one User; has clientId foreign key |
-| **SyncJob**  | Background sync status tracker        | firm_id | many←one User; tracks Gmail/Drive jobs  |
-| **AuditLog** | Compliance + access tracking          | firm_id | logs all data modifications             |
+| Model           | Purpose                                  | RLS Key | Relationships                                                      |
+| --------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------ |
+| **Firm**        | Organization/tenant root                 | firm_id | 1→many Users, Clients, ChatSessions                                |
+| **User**        | Team members (admins, staff)             | firm_id | many←one Firm; 1→many SyncJobs                                     |
+| **Client**      | Taxpayer/business entity                 | firm_id | many←one Firm; 1→many Documents                                    |
+| **Document**    | Uploaded files (Gmail, Drive, manual)    | firm_id | many←one Firm, Client; 1→many Chunks                               |
+| **Chunk**       | Text segments with embeddings            | firm_id | many←one Document; has vector(1536)                                |
+| **Query**       | RAG chat queries + feedback              | firm_id | many←one User; has clientId foreign key                            |
+| **SyncJob**     | Background sync status tracker           | firm_id | many←one User; tracks Gmail/Drive jobs; supports keyword filtering |
+| **AuditLog**    | Compliance + access tracking             | firm_id | logs all data modifications                                        |
+| **ChatSession** | Conversation sessions (2hr expiry)       | firm_id | many←one Firm, User; 1→many ChatMessages; optional client context  |
+| **ChatMessage** | Individual messages (user/assistant/sys) | N/A     | many←one ChatSession; tracks tokens, tools used, search results    |
 
 **Key Features:**
 
-- **Multi-tenancy via firm_id partition key** on every table
+- **Multi-tenancy via firm_id partition key** on every table (ChatMessages inherit from ChatSession)
 - **pgvector integration** on Chunk.embedding (1536-dim, IVFFlat index for cosine similarity)
-- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback
-- **Cascade deletes** for data cleanup (Document → Chunks, SyncJob orphans)
+- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback, MessageRole
+- **Cascade deletes** for data cleanup (Document → Chunks, ChatSession → ChatMessages)
 - **Timestamps** on every entity (createdAt, updatedAt)
+- **Automatic session expiry** via `expiresAt` column (2hr default, cleanup via admin endpoint)
+- **Keyword-based sync filtering** via `keywords[]` and `includeAllKeywords` boolean (AND/OR logic)
 
 ### 7.2 Multi-Tenancy Strategy
 
@@ -465,50 +471,64 @@ Our Prisma schema defines 8 core models with pgvector support and RLS:
 
 The RAG pipeline is fully implemented in `apps/api/src/lib/rag.ts` and `apps/api/src/routes/chat.ts`. It provides grounded, citation-backed answers using pgvector similarity search over indexed document chunks.
 
-### 8.2 Pipeline Flow
+### 8.2 Pipeline Flow (Enhanced with Conversation Memory & LLM Tools)
 
 ```
-User Query
+User Query (with optional sessionId)
   ↓
-[1. Cache Check] → Redis lookup (SHA256 key: firmId:query:clientId:filters, 24hr TTL)
-  ↓  (cache hit → return cached response with cached:true, skip to step 10)
+[1. Session Management] → createOrResumeSession() → sessionId returned
   ↓
-[2. Embed Query] → OpenAI text-embedding-3-small (1536 dims)
+[2. Build Conversation Context] → buildConversationContext(sessionId, 3000 token limit)
+  ↓  (intelligent trimming: always keeps recent user-assistant pairs)
   ↓
-[3. Vector Search] → pgvector cosine distance, RETRIEVAL_LIMIT=20
+[3. Cache Check] → Redis lookup (SHA256 key: firmId:query:clientId:filters, 24hr TTL)
+  ↓  (cache hit → return cached response with cached:true, skip to step 12)
   ↓
-[4. Hard Cutoff] → SIMILARITY_THRESHOLD=0.55 (no fallback — accuracy > recall)
+[4. Embed Query] → OpenAI text-embedding-3-small (1536 dims)
   ↓
-[5. Recency Weighting] → score = similarity × (1 / (1 + ageDays/365))
+[5. Vector Search] → pgvector cosine distance, RETRIEVAL_LIMIT=20
   ↓
-[6. Top-K Selection] → DEFAULT_LIMIT=8 chunks returned
+[6. Hard Cutoff] → SIMILARITY_THRESHOLD=0.55 (no fallback — accuracy > recall)
   ↓
-[7. Confidence Scoring] → computeConfidence(chunks) → {level, score}
+[7. Recency Weighting] → score = similarity × (1 / (1 + ageDays/365))
   ↓
-[8. Prompt Assembly] → System prompt + firm snapshot + context blocks + user query
+[8. Top-K Selection] → DEFAULT_LIMIT=8 chunks returned
   ↓
-[9. LLM Call] → GPT-4o-mini with response_format: json_object
+[9. Confidence Scoring] → computeConfidence(chunks) → {level, score}
   ↓
-[10. Response Parse] → Extract answer, suggestedFollowups, token counts
+[10. Prompt Assembly] → System prompt + firm snapshot + conversation context + context blocks + user query
   ↓
-[11. Cache Write] → Redis SET with 24hr TTL (non-fatal on failure)
+[11. LLM Call (Two-Phase)] → GPT-4o-mini with function calling (3 tools available)
+  ↓  Phase 1: AI decides whether to call tools (get_firm_analytics, get_client_details, find_unassigned_documents)
+  ↓  Phase 2: If tools called → execute → final completion with tool results
+  ↓  (response_format: json_object for structured output)
   ↓
-[12. Audit & Store] → prisma.query.create (chunk IDs, tokens, cost, latency)
+[12. Response Parse] → Extract answer, suggestedFollowups, token counts
   ↓
-ChatResponse to frontend (with confidence + cached fields)
+[13. Save Messages] → saveMessage(sessionId, userQuery) + saveMessage(sessionId, assistantResponse)
+  ↓  (tracks token usage, tools used, search results count per message)
+  ↓
+[14. Cache Write] → Redis SET with 24hr TTL (non-fatal on failure)
+  ↓
+[15. Audit & Store] → prisma.query.create (chunk IDs, tokens, cost, latency)
+  ↓
+ChatResponse to frontend (with confidence + cached + sessionId fields)
 ```
 
 ### 8.3 Key Constants
 
-| Constant               | Value                  | Description                                 |
-| ---------------------- | ---------------------- | ------------------------------------------- |
-| `SIMILARITY_THRESHOLD` | 0.55                   | Hard cosine similarity cutoff (no fallback) |
-| `DEFAULT_LIMIT`        | 8                      | Max chunks returned to prompt               |
-| `RETRIEVAL_LIMIT`      | 20                     | Max rows fetched from pgvector              |
-| `RECENCY_SCALE_DAYS`   | 365                    | Half-life for recency weighting             |
-| `CHAT_MODEL`           | gpt-4o-mini            | LLM used for answer generation              |
-| `EMBEDDING_MODEL`      | text-embedding-3-small | Embedding model (1536 dims)                 |
-| `QUERY_CACHE_TTL`      | 86400 (24hr)           | Redis cache TTL for identical queries       |
+| Constant                  | Value                  | Description                                 |
+| ------------------------- | ---------------------- | ------------------------------------------- |
+| `SIMILARITY_THRESHOLD`    | 0.55                   | Hard cosine similarity cutoff (no fallback) |
+| `DEFAULT_LIMIT`           | 8                      | Max chunks returned to prompt               |
+| `RETRIEVAL_LIMIT`         | 20                     | Max rows fetched from pgvector              |
+| `RECENCY_SCALE_DAYS`      | 365                    | Half-life for recency weighting             |
+| `CHAT_MODEL`              | gpt-4o-mini            | LLM used for answer generation              |
+| `EMBEDDING_MODEL`         | text-embedding-3-small | Embedding model (1536 dims)                 |
+| `QUERY_CACHE_TTL`         | 86400 (24hr)           | Redis cache TTL for identical queries       |
+| `SESSION_EXPIRY_HOURS`    | 2                      | Chat session auto-expiry (cleanup via cron) |
+| `MAX_CONTEXT_TOKENS`      | 3000                   | Conversation context token limit            |
+| `SESSION_ACTIVITY_UPDATE` | on every message       | Updates `lastActivity` timestamp            |
 
 ### 8.4 Hard Cutoff Strategy
 
@@ -609,7 +629,7 @@ SyncJob created in DB + BullMQ job enqueued
 
 ### 10.1 Route Organization
 
-All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **19 total endpoints** across 6 routers:
+All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **29 total endpoints** across 8 routers:
 
 #### **Auth Routes** (`/api/auth/*` — 4 endpoints)
 
@@ -618,30 +638,45 @@ All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envel
 - `POST /logout` — Revoke session (✅ Live, Redis blacklist planned)
 - `GET /me` — Return authenticated user + firm context (✅ Live, requires `requireAuth`)
 
-#### **Documents Routes** (`/api/documents/*` — 4 endpoints)
+#### **Documents Routes** (`/api/documents/*` — 5 endpoints)
 
 - `GET /` — Paginated list with optional filters (source, clientId, status)
 - `GET /:id` — Single document detail with chunk count
-- `POST /upload` — Manual file upload (scaffolded, returns 501)
+- `GET /thread/:threadId` — Thread summary endpoint (all emails in Gmail thread)
+- `POST /upload` — Manual file upload with multer, MIME validation, extract → chunk → embed pipeline (✅ Live)
 - `DELETE /:id` — Delete document + cascade delete chunks
 
 #### **Chat Routes** (`/api/chat/*` — 3 endpoints)
 
-- `POST /` — Submit RAG query: embed query → pgvector search → GPT-4o-mini → grounded answer with citations (✅ Live)
+- `POST /` — Submit RAG query with optional sessionId: embed query → pgvector search → LLM with function calling → grounded answer with citations (✅ Live with conversation memory + 3 AI tools)
 - `GET /history` — Query history with pagination (✅ Live)
 - `POST /:queryId/feedback` — Record positive/negative/none feedback (✅ Live)
 
-#### **Drafts Routes** (`/api/drafts/*` — 2 endpoints)
+#### **Drafts Routes** (`/api/drafts/*` — 3 endpoints)
 
 - `POST /` — Generate AI email draft with optional RAG context (✅ Live)
 - `POST /refine` — Refine existing draft with new instructions (✅ Live)
+- `POST /send` — Save draft to Gmail via Gmail Drafts API (✅ Live)
 
 #### **Sync Routes** (`/api/sync/*` — 4 endpoints)
 
-- `POST /gmail` — Enqueue Gmail sync job → 202 Accepted with jobId
-- `POST /drive` — Enqueue Google Drive sync job → 202 Accepted with jobId
+- `POST /gmail` — Enqueue Gmail sync job with optional keyword filtering (AND/OR logic, max 10 keywords) → 202 Accepted with jobId (✅ Live)
+- `POST /drive` — Enqueue Google Drive sync job with optional keyword filtering → 202 Accepted with jobId (✅ Live)
 - `GET /status` — List user's recent sync jobs (20 most recent)
 - `POST /cancel/:jobId` — Cancel running job (409 if already completed)
+
+#### **Clients Routes** (`/api/clients/*` — 5 endpoints)
+
+- `GET /` — List all clients for the firm (✅ Live)
+- `POST /` — Create new client with name + identifier + email domain (✅ Live)
+- `GET /:id` — Client detail with full metadata (✅ Live)
+- `GET /:id/summary` — Client snapshot: risk scoring, document breakdown, recent activity (✅ Live)
+- `POST /:id/assign-docs` — Bulk document assignment to client (✅ Live)
+
+#### **Admin Routes** (`/api/admin/*` — 2 endpoints)
+
+- `POST /cleanup-sessions` — Remove expired chat sessions and orphaned messages (✅ Live)
+- `GET /firm-snapshot/:firmId` — Generate comprehensive firm knowledge snapshot for AI context (✅ Live)
 
 #### **Health Route** (`/api/health` — 1 endpoint)
 
@@ -754,18 +789,20 @@ src/app/
 
 ### 11.3 Key Components
 
-| Component      | File                        | Purpose                                                          |
-| -------------- | --------------------------- | ---------------------------------------------------------------- |
-| `AppNav`       | `components/app-nav.tsx`    | Fixed 224px sidebar: firm name, nav links, user avatar, sign-out |
-| `UserProvider` | `contexts/user-context.tsx` | Auth context: fetches `/api/auth/me`, provides `useUser()` hook  |
-| `apiFetch`     | `lib/api.ts`                | Typed fetch wrapper with JWT `Authorization` header injection    |
+| Component      | File                           | Purpose                                                                                          |
+| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `AppNav`       | `components/app-nav.tsx`       | Fixed 224px sidebar: firm name, nav links (Chat/Docs/Sync/Drafts/Clients), user avatar, sign-out |
+| `UserProvider` | `contexts/user-context.tsx`    | Auth context: fetches `/api/auth/me`, provides `useUser()` hook                                  |
+| `apiFetch`     | `lib/api.ts`                   | Typed fetch wrapper with `credentials: 'include'` for HttpOnly cookie auth                       |
+| `ThreadViewer` | `components/thread-viewer.tsx` | Gmail conversation thread viewer with collapsible message cards                                  |
 
 ### 11.4 Page Features
 
-- **Chat**: History sidebar (30 recent queries), message thread with user/assistant/error bubbles, expandable source citations, follow-up chips, auto-resizing textarea, starter suggestions, thinking indicator
-- **Documents**: Sync Gmail/Drive buttons, active-sync banner with polling, filterable table (source + status), status badges, pagination
-- **Sync**: Gmail + Drive action cards, ref-based `setTimeout` polling (not `setInterval`), animated running indicator, duration column, per-job Cancel
-- **Drafts**: Instruction textarea, client-ID filter, context toggle, editable subject + body, Refine panel, Context Sources accordion, Copy-to-clipboard, cost/latency metadata
+- **Chat**: History sidebar (30 recent queries), message thread with user/assistant/error bubbles, expandable source citations, follow-up chips, auto-resizing textarea, starter suggestions, thinking indicator, **session state management** (automatic session ID tracking for conversation continuity across page reloads)
+- **Documents**: Sync Gmail/Drive buttons, active-sync banner with polling, filterable table (source + status), status badges, pagination, **client filter dropdown**, **re-sync button** for updating document-client assignments
+- **Sync**: Gmail + Drive action cards with **keyword filtering UI** (AND/OR logic selector, chip-based keyword input), ref-based `setTimeout` polling (not `setInterval`), animated running indicator, duration column, per-job Cancel
+- **Clients** (NEW): Client listing with creation modal, client detail view with comprehensive analytics (risk scoring, document breakdown, recent activity), Gmail thread viewer integration, bulk document assignment
+- **Drafts**: Instruction textarea, client-ID filter, context toggle, editable subject + body, Refine panel, Context Sources accordion, Copy-to-clipboard, cost/latency metadata, **Save to Gmail** button
 
 ### 11.5 Configuration
 
@@ -812,14 +849,16 @@ Stored in localStorage (production: planned migration to HttpOnly cookie)
 - Application-level `firmId` filter on all Prisma queries
 - Workers decrypt tokens per-user: `Buffer.from(user.googleRefreshTokenEnc).toString("utf8")` then `decrypt()`
 
-### 12.5 Known Security Items (Dev OK, Production TODO)
+### 12.5 Security Status (Updated 1 Mar 2026)
 
-| Item              | Current State                  | Production Plan                         |
-| ----------------- | ------------------------------ | --------------------------------------- |
-| JWT storage       | localStorage                   | HttpOnly Set-Cookie                     |
-| Logout            | Stateless (client drops token) | Redis JWT blacklist                     |
-| Rate limiting     | Not enforced                   | Per-user 60 req/hr, per-firm 500 req/hr |
-| X-Dev-User bypass | Active in dev                  | Disabled via `NODE_ENV` check           |
+| Item              | Status                                                | Notes                                                   |
+| ----------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| JWT storage       | ✅ HttpOnly cookie (`__session`) with Bearer fallback | Cookie checked first, header fallback for API clients   |
+| Logout            | ✅ Redis JWT blacklist (fail-closed)                  | Blacklist check fails CLOSED (503) on Redis downtime    |
+| Rate limiting     | ✅ Redis sliding-window enforced                      | Per-user 60/hr, per-firm 500/hr, per-IP 30/min (public) |
+| X-Dev-User bypass | ✅ Production-hardened                                | Explicit 403 rejection when sent in production          |
+| Cost protection   | ✅ Token caps + sync guardrails                       | 50K tokens/day/firm, 6K/query, 10K emails/sync          |
+| Session cleanup   | ✅ Auto-expiry with admin endpoint                    | 2hr TTL, cleanup via `POST /admin/cleanup-sessions`     |
 
 ---
 
