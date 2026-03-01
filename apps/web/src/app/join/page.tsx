@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Spinner } from "@/components/ui";
 
@@ -14,7 +14,7 @@ interface InvitePreview {
   email?: string | null;
 }
 
-export default function JoinPage() {
+function JoinPageContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
@@ -172,5 +172,34 @@ export default function JoinPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function JoinPageLoading() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-surface-secondary">
+      <div className="w-full max-w-sm space-y-8">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gray-900 text-white text-sm font-bold flex items-center justify-center shadow-card">
+            CA
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">AI for Accountants</h1>
+        </div>
+        <div className="bg-surface rounded-2xl border border-border shadow-card p-6">
+          <div className="flex flex-col items-center gap-3 py-6">
+            <Spinner size="md" />
+            <p className="text-sm text-muted">Loading invite…</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={<JoinPageLoading />}>
+      <JoinPageContent />
+    </Suspense>
   );
 }

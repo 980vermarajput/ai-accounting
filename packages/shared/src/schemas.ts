@@ -232,3 +232,26 @@ export const invitePreviewSchema = z.object({
   expiresAt: z.string(),
 });
 export type InvitePreviewOutput = z.infer<typeof invitePreviewSchema>;
+
+// ─── Telegram Integration Schemas ────────────────────
+
+export const telegramLinkStatusSchema = z.object({
+  linked: z.boolean(),
+  telegramChatId: z.string().optional(),
+  telegramUsername: z.string().optional(),
+  alertsEnabled: z.boolean(),
+  linkedAt: z.string().optional(),
+});
+export type TelegramLinkStatusOutput = z.infer<typeof telegramLinkStatusSchema>;
+
+export const telegramLinkCodeResponseSchema = z.object({
+  code: z.string().length(6),
+  expiresIn: z.number().int().positive(),
+  botUsername: z.string(),
+});
+export type TelegramLinkCodeOutput = z.infer<typeof telegramLinkCodeResponseSchema>;
+
+export const telegramNotificationsSchema = z.object({
+  enabled: z.boolean(),
+});
+export type TelegramNotificationsInput = z.infer<typeof telegramNotificationsSchema>;

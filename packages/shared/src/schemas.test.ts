@@ -12,6 +12,9 @@ import {
   deadlineCalendarQuerySchema,
   extractedDeadlineSchema,
   deadlineConfidenceSchema,
+  telegramLinkStatusSchema,
+  telegramLinkCodeResponseSchema,
+  telegramNotificationsSchema,
 } from "./schemas";
 
 // ─── googleCallbackSchema ─────────────────────────────────────────────────────
@@ -532,5 +535,107 @@ describe("extractedDeadlineSchema", () => {
         createdAt: "2025-03-01T00:00:00Z",
       }),
     ).toThrow();
+  });
+});
+
+// ─── telegramLinkStatusSchema ─────────────────────────────────────────────────
+
+describe("telegramLinkStatusSchema", () => {
+  it("accepts unlinked status", () => {
+    const result = telegramLinkStatusSchema.parse({
+      linked: false,
+      alertsEnabled: false,
+    });
+    expect(result.linked).toBe(false);
+    expect(result.telegramChatId).toBeUndefined();
+  });
+
+  it("accepts linked status with all fields", () => {
+    const result = telegramLinkStatusSchema.parse({
+      linked: true,
+      telegramChatId: "123456789",
+      telegramUsername: "testuser",
+      alertsEnabled: true,
+      linkedAt: "2025-03-01T10:00:00.000Z",
+    });
+    expect(result.linked).toBe(true);
+    expect(result.telegramUsername).toBe("testuser");
+    expect(result.alertsEnabled).toBe(true);
+  });
+
+  it("rejects missing alertsEnabled", () => {
+    expect(() => telegramLinkStatusSchema.parse({ linked: false })).toThrow();
+  });
+
+  it("rejects non-boolean linked", () => {
+    expect(() =>
+      telegramLinkStatusSchema.parse({ linked: "yes", alertsEnabled: false }),
+    ).toThrow();
+  });
+});
+
+// ─── telegramLinkCodeResponseSchema ───────────────────────────────────────────
+
+describe("telegramLinkCodeResponseSchema", () => {
+  it("accepts valid link code response", () => {
+    const result = telegramLinkCodeResponseSchema.parse({
+      code: "ABC123",
+      expiresIn: 600,
+      botUsername: "aica_bot",
+    });
+    expect(result.code).toBe("ABC123");
+    expect(result.expiresIn).toBe(600);
+    expect(result.botUsername).toBe("aica_bot");
+  });
+
+  it("rejects code with wrong length", () => {
+    expect(() =>
+      telegramLinkCodeResponseSchema.parse({
+        code: "AB12", // too short
+        expiresIn: 600,
+        botUsername: "aica_bot",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects negative expiresIn", () => {
+    expect(() =>
+      telegramLinkCodeResponseSchema.parse({
+        code: "ABC123",
+        expiresIn: -1,
+        botUsername: "aica_bot",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects missing botUsername", () => {
+    expect(() =>
+      telegramLinkCodeResponseSchema.parse({
+        code: "ABC123",
+        expiresIn: 600,
+      }),
+    ).toThrow();
+  });
+});
+
+// ─── telegramNotificationsSchema ──────────────────────────────────────────────
+
+describe("telegramNotificationsSchema", () => {
+  it("accepts enabled: true", () => {
+    const result = telegramNotificationsSchema.parse({ enabled: true });
+    expect(result.enabled).toBe(true);
+  });
+
+  it("accepts enabled: false", () => {
+    const result = telegramNotificationsSchema.parse({ enabled: false });
+    expect(result.enabled).toBe(false);
+  });
+
+  it("rejects non-boolean enabled", () => {
+    expect(() => telegramNotificationsSchema.parse({ enabled: "yes" })).toThrow();
+  });
+
+  it("rejects missing enabled field", () => {
+    expect(() => telegramNotificationsSchema.parse({})).toThrow();
   });
 });

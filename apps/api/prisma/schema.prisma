@@ -97,6 +97,7 @@ model Firm {
   briefings     DailyBriefing[]
   extractedDeadlines ExtractedDeadline[]
   invites       FirmInvite[]
+  telegramLinks TelegramLink[]
 
   @@map("firms")
 }
@@ -124,6 +125,7 @@ model User {
   chatSessions ChatSession[]
   invitesCreated  FirmInvite[] @relation("InviteCreator")
   invitesAccepted FirmInvite[] @relation("InviteAcceptor")
+  telegramLink    TelegramLink?
 
   @@index([firmId])
   @@map("users")
@@ -433,4 +435,23 @@ model FirmInvite {
   @@index([firmId])
   @@index([token])
   @@map("firm_invites")
+}
+
+// ─── Telegram Links ───────────────────────────────────────────────────
+
+model TelegramLink {
+  id              String   @id @default(cuid())
+  firmId          String   @map("firm_id") @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  telegramChatId  BigInt   @unique @map("telegram_chat_id")
+  telegramUsername String? @map("telegram_username") @db.VarChar(100)
+  alertsEnabled   Boolean  @default(false) @map("alerts_enabled")
+  linkedAt        DateTime @default(now()) @map("linked_at") @db.Timestamptz()
+  isActive        Boolean  @default(true) @map("is_active")
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([firmId])
+  @@map("telegram_links")
 }

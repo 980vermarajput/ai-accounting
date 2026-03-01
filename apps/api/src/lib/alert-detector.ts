@@ -10,11 +10,15 @@
  * 4. HIGH_RISK_LANGUAGE — risky keywords in recent chunks
  *
  * Dedup: skip if identical (firmId + clientId + type) unread alert exists within 24 hours.
+ *
+ * Telegram notifications: HIGH and CRITICAL alerts are pushed to users with
+ * Telegram linked and alertsEnabled = true.
  */
 
 import type { AlertType, Severity } from "@prisma/client";
 import { prisma } from "./prisma";
 import { logger } from "./logger";
+import { sendMessage, escapeHtml } from "./telegram";
 
 // ─── Types ───────────────────────────────────────────
 
@@ -66,6 +70,112 @@ async function isDuplicate(
   });
 
   return existing !== null;
+}
+
+// ─── Telegram Push Notifications ─────────────────────
+
+const SEVERITY_EMOJI: Record<Severity, string> = {
+  CRITICAL: "🚨",
+  HIGH: "⚠️",
+  MEDIUM: "📢",
+  LOW: "ℹ️",
+};
+
+/**
+ * Send Telegram notifications for HIGH and CRITICAL alerts to firm users
+ * who have Telegram linked with alertsEnabled = true.
+ */
+async function pushAlertToTelegram(
+  firmId: string,
+  alert: {
+    type: AlertType;
+    severity: Severity;
+    title: string;
+    body: string | null;
+  },
+): Promise<{ sent: number; failed: number }> {
+  // Only push HIGH and CRITICAL alerts
+  if (alert.severity !== "HIGH" && alert.severity !== "CRITICAL") {
+    return { sent: 0, failed: 0 };
+  }
+
+  // Skip if Telegram bot is not configured
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    return { sent: 0, failed: 0 };
+  }
+
+  try {
+    // Find all users in this firm with Telegram linked and alerts enabled
+    const telegramLinks = await prisma.telegramLink.findMany({
+      where: {
+        firmId,
+        alertsEnabled: true,
+      },
+      select: {
+        telegramChatId: true,
+        user: {
+          select: { name: true },
+        },
+      },
+    });
+
+    if (telegramLinks.length === 0) {
+      return { sent: 0, failed: 0 };
+    }
+
+    const emoji = SEVERITY_EMOJI[alert.severity];
+    const message = [
+      `${emoji} <b>${alert.severity} Alert</b>`,
+      "",
+      `<b>${escapeHtml(alert.title)}</b>`,
+      "",
+      alert.body ? escapeHtml(alert.body) : "",
+      "",
+      `<i>Type: ${alert.type.replace(/_/g, " ")}</i>`,
+    ].join("\n");
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const link of telegramLinks) {
+      try {
+        await sendMessage(Number(link.telegramChatId), message, {
+          parseMode: "HTML",
+        });
+        sent++;
+        logger.debug("Telegram alert sent", {
+          firmId,
+          chatId: link.telegramChatId.toString(),
+          alertType: alert.type,
+        });
+      } catch (err) {
+        failed++;
+        logger.warn("Failed to send Telegram alert", {
+          firmId,
+          chatId: link.telegramChatId.toString(),
+          error: (err as Error).message,
+        });
+      }
+    }
+
+    if (sent > 0) {
+      logger.info("Telegram alerts pushed", {
+        firmId,
+        alertType: alert.type,
+        severity: alert.severity,
+        sent,
+        failed,
+      });
+    }
+
+    return { sent, failed };
+  } catch (err) {
+    logger.error("Failed to push Telegram alerts", {
+      firmId,
+      error: (err as Error).message,
+    });
+    return { sent: 0, failed: 0 };
+  }
 }
 
 // ─── Rule 1: INVOICE_OVERDUE ─────────────────────────
@@ -137,6 +247,15 @@ async function detectInvoiceOverdue(firmId: string): Promise<AlertDetectionResul
             },
           },
         });
+
+        // Push to Telegram (non-blocking, errors logged but don't affect result)
+        await pushAlertToTelegram(firmId, {
+          type: "INVOICE_OVERDUE",
+          severity: "HIGH",
+          title: `Invoice overdue — ${client.name}`,
+          body: `Client "${client.name}" has an invoice (${invoiceDocs[0].filename}) with no follow-up activity in the last 45 days. Consider sending a reminder.`,
+        });
+
         result.generated++;
       } catch (err) {
         result.errors.push(
@@ -216,6 +335,15 @@ async function detectClientSilent(firmId: string): Promise<AlertDetectionResult>
             },
           },
         });
+
+        // Push to Telegram (only HIGH/CRITICAL, non-blocking)
+        await pushAlertToTelegram(firmId, {
+          type: "CLIENT_SILENT",
+          severity,
+          title: `No activity from ${client.name} in ${daysSince} days`,
+          body: `Client "${client.name}" hasn't had any document activity in ${daysSince} days. Last document was on ${lastDocDate.toLocaleDateString("en-IN")}.`,
+        });
+
         result.generated++;
       } catch (err) {
         result.errors.push(
@@ -301,6 +429,15 @@ async function detectHighRiskLanguage(firmId: string): Promise<AlertDetectionRes
               },
             },
           });
+
+          // Push to Telegram (non-blocking)
+          await pushAlertToTelegram(firmId, {
+            type: "HIGH_RISK_LANGUAGE",
+            severity: "HIGH",
+            title: `Risk language detected — "${keyword}" in ${clientName} document`,
+            body: `Found "${keyword}" in document "${chunk.document.filename}": "…${snippet}…"`,
+          });
+
           result.generated++;
         }
       } catch (err) {

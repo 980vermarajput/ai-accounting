@@ -1,8 +1,8 @@
 # MVP PRD — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.5 — Updated 2026-03-02
+> **Version:** 2.6 — Updated 2026-03-01
 > **Author:** @980vermarajput
-> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction + **Team Invite System** Live — All Tests Passing — **Sprint 3 Complete**
+> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** Live — All Tests Passing — **Sprint 4 Complete**
 
 ---
 
@@ -61,6 +61,7 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | **Audit Logging**    | Every query, every chunk sent to LLM, every user action                               |
 | **Billing (simple)** | Stripe Checkout for per-seat monthly billing                                          |
 | **Team Invite**      | Admin-generated invite links so associates can join a firm without creating a new one |
+| **Telegram Bot**     | Query firm data via Telegram — /ask for RAG, /clients list, /summary, /alerts toggle  |
 
 ### ❌ Out of Scope (Future Phases)
 
@@ -68,7 +69,7 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 - Automated action execution (no auto-send emails, no writes to external systems)
 - GST calculations, audit modules, or tax filing logic
 - Mobile native app (responsive web only for MVP)
-- Slack / WhatsApp integrations
+- Slack / WhatsApp integrations (Telegram implemented, WhatsApp planned)
 - Custom model fine-tuning
 - SSO / SAML (enterprise identity providers)
 
@@ -289,6 +290,21 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 **Indexes:** `[firmId]`, `[firmId, date]`, `[documentId]`
 
+### `telegram_links` (✅ Complete — Sprint 4 — 1 Mar 2026)
+
+| Column           | Type          | Notes                                        |
+| ---------------- | ------------- | -------------------------------------------- |
+| id               | CUID PK       |                                              |
+| firm_id          | FK → firms.id | Which firm the Telegram account is linked to |
+| user_id          | FK → users.id | UNIQUE — one Telegram link per user          |
+| telegram_chat_id | BIGINT UNIQUE | Telegram chat ID for sending messages        |
+| telegram_user    | VARCHAR(255)  | Telegram username (optional, for display)    |
+| alerts_enabled   | BOOLEAN       | Default true — receive alert notifications   |
+| created_at       | TIMESTAMPTZ   |                                              |
+| updated_at       | TIMESTAMPTZ   |                                              |
+
+**Indexes:** `[telegramChatId]` (unique), `[userId]` (unique), `[firmId]`
+
 ---
 
 ## 7 — Vectorization & Chunking Strategy
@@ -483,6 +499,38 @@ Document → Text Extraction → Normalization → Dedup Check
 | GET    | `/api/deadlines`          | Paginated deadline list with client/date/confidence filters | ✅ Live |
 | GET    | `/api/deadlines/calendar` | Deadlines grouped by date for calendar month view           | ✅ Live |
 | GET    | `/api/deadlines/export`   | Export deadlines as ICS (iCalendar) file for download       | ✅ Live |
+
+### Telegram Bot (✅ Complete — Sprint 4 — 1 Mar 2026)
+
+| Method | Endpoint                      | Description                                              | Status  |
+| ------ | ----------------------------- | -------------------------------------------------------- | ------- |
+| POST   | `/api/webhooks/telegram`      | Telegram webhook (receives bot updates, secret verified) | ✅ Live |
+| GET    | `/api/telegram/status`        | Check user's Telegram link status                        | ✅ Live |
+| POST   | `/api/telegram/link-code`     | Generate 6-digit link code (10-min TTL, stored in Redis) | ✅ Live |
+| DELETE | `/api/telegram/unlink`        | Unlink Telegram account from user                        | ✅ Live |
+| PATCH  | `/api/telegram/notifications` | Toggle alert notifications on/off                        | ✅ Live |
+
+**Bot Commands (via Telegram):**
+
+| Command    | Description                                  |
+| ---------- | -------------------------------------------- |
+| `/start`   | Welcome message + instructions               |
+| `/help`    | List available commands                      |
+| `/link`    | Generate 6-digit code to link account        |
+| `/unlink`  | Unlink Telegram from account                 |
+| `/ask <q>` | Query firm data via RAG pipeline             |
+| `/clients` | Paginated client list with inline navigation |
+| `/alerts`  | Toggle alert notifications on/off            |
+| `/summary` | Today's daily briefing summary               |
+
+**Rate Limiting:** 20 messages per hour per user (tracked in Redis)
+
+**Alert Push Notifications:**
+
+- HIGH and CRITICAL alerts are automatically pushed to linked Telegram accounts
+- Users must have `alertsEnabled = true` (default) to receive push alerts
+- Alert types: `INVOICE_OVERDUE`, `CLIENT_SILENT`, `HIGH_RISK_LANGUAGE`, `DEADLINE_DETECTED`
+- Format: Emoji (🚨/⚠️) + severity + title + body + type
 
 ---
 

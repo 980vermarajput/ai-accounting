@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 2 March 2026 (12:00 UTC)
-**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + **Team Invite System** — All Tests Passing — **Sprint 3 Complete**
+**Last Updated:** 1 March 2026 (21:15 UTC)
+**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** — All 304 Tests Passing — **Sprint 4 Complete**
 
 ---
 
@@ -15,21 +15,23 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 **🧠 SMART CONVERSATION MEMORY LIVE:** Session-based chat continuity, 3000-token context limit with intelligent trimming, automatic session management (2-hour expiry), real-time firm analytics accessible to AI via function calling.
 
+**📱 TELEGRAM BOT INTEGRATION:** Chat with AICA from Telegram for quick queries, client lookups, daily summaries, and real-time alerts — account linking via 6-char codes, 20 msg/hr rate limiting.
+
 ### Quick Status
 
 - ✅ **Monorepo Structure:** pnpm + Turborepo configured, all workspaces linked
-- ✅ **API Server:** Express.js with health + auth + documents + chat + sync + drafts + clients + admin + dashboard + deadlines routes on :4000
+- ✅ **API Server:** Express.js with health + auth + documents + chat + sync + drafts + clients + admin + dashboard + deadlines + team + telegram routes on :4000
 - ✅ **Web Frontend:** Next.js 14 with Tailwind CSS, full app UI on :3000
-- ✅ **Shared Types:** Domain model + Zod validation schemas defined (23 schemas including dashboard/alert/briefing/deadline)
-- ✅ **Database:** Postgres 16 + pgvector with RLS, 13 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs, chat_sessions, chat_messages, alerts, daily_briefings, extracted_deadlines), `embedding Unsupported("vector(1536)")` protected
+- ✅ **Shared Types:** Domain model + Zod validation schemas defined (28+ schemas including dashboard/alert/briefing/deadline/team/telegram)
+- ✅ **Database:** Postgres 16 + pgvector with RLS, 15 tables (firms, users, clients, documents, chunks, queries, audit_logs, sync_jobs, chat_sessions, chat_messages, alerts, daily_briefings, extracted_deadlines, firm_invites, telegram_links), `embedding Unsupported("vector(1536)")` protected
 - ✅ **Migrations:** Applied + seeded with demo firm/users/clients
 - ✅ **Authentication:** Google OAuth + JWT + HttpOnly cookies + Redis JWT blacklist (fail-closed); AES-256-GCM refresh token encryption; dev header bypass protection
-- ✅ **Rate Limiting:** Redis sliding-window — per-user 60/hr, per-firm 500/hr, public endpoints 30/min
+- ✅ **Rate Limiting:** Redis sliding-window — per-user 60/hr, per-firm 500/hr, public endpoints 30/min, Telegram 20 msg/hr per user
 - ✅ **Cost Protection:** Per-firm daily token caps (50K), per-query limits (6K), global spend alerts, Redis usage tracking
 - ✅ **Gmail Sync Limits:** 10K emails max per sync, 24-month lookback window, newsletter/automated email filtering
 - ✅ **Security Headers:** Enhanced CSP, HSTS (1-year), Cross-Origin Embedder Policy, frame protection
 - ✅ **Observability:** Structured JSON logging for costs, auth events, RAG metrics, sync jobs, errors
-- ✅ **Vitest Test Suite:** 248 tests passing (180 API [13 test files] + 68 shared)
+- ✅ **Vitest Test Suite:** 304 tests passing (224 API [14 test files] + 80 shared)
 - ✅ **ESLint + Prettier:** ESLint 9 flat config, Prettier 3.8.1 — 0 errors, 9 acceptable warnings
 - ✅ **CI/CD Pipeline:** GitHub Actions workflow for build, typecheck, lint, test on PRs + main
 - ✅ **BullMQ Sync Workers:** Gmail + Drive workers runtime-tested; attachment extraction working
@@ -53,7 +55,8 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - ✅ **BullMQ Scheduler:** Daily cron at 07:00 IST (01:30 UTC) for alert detection + briefing generation
 - ✅ **Deadline Extraction:** Regex + GPT-4o-mini hybrid pipeline extracts compliance deadlines from document chunks, creates DEADLINE_DETECTED alerts
 - ✅ **Deadline Calendar UI:** Calendar + list view with client filter, colour coding (past due/upcoming/future), ICS export, side panel detail view
-- ✅ **Team Invite System:** Admin invite-link flow so associates can join an existing firm — schema migration applied, `/api/team` router (7 endpoints), public `/join` page, admin `/settings/team` page, conditional Team nav item for admins
+- ✅ **Team Invite System:** Admin invite-link flow so associates can join an existing firm — `firm_invites` schema migration applied, `/api/team` router (7 endpoints), public `/join/:token` page, admin `/settings/team` page, conditional Team nav item for admins only
+- ✅ **Telegram Bot Integration:** Query firm data from Telegram — account linking via 6-char codes, 8 commands (/ask, /clients, /summary, /alerts, /link, /unlink, /help, /start), webhook handler, settings API, frontend settings page
 
 ---
 
@@ -70,7 +73,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 ### Database & ORM
 
 - **Prisma 6.19.2** installed with @prisma/client
-- **13 tables** created with pgvector support: `firms`, `users`, `clients`, `documents`, `chunks`, `queries`, `audit_logs`, `sync_jobs`, `chat_sessions`, `chat_messages`, `alerts`, `daily_briefings`, `extracted_deadlines`
+- **14 tables** created with pgvector support: `firms`, `users`, `clients`, `documents`, `chunks`, `queries`, `audit_logs`, `sync_jobs`, `chat_sessions`, `chat_messages`, `alerts`, `daily_briefings`, `extracted_deadlines`, `firm_invites`
 - **RLS policies** enabled on all tables via `firm_id` partition key
 - **Migrations** applied successfully against local Postgres 16 + pgvector
 - **Seed data** created: 1 firm (Sharma & Associates), 2 users (admin + member), 2 clients
@@ -80,21 +83,25 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **Alert & Briefing schema**: Alert model (with firmId, clientId, type, severity, title, body, metadata, isRead, resolvedAt, expiresAt; indexes on [firmId], [firmId,type,isRead], [firmId,severity]) + DailyBriefing model (with @@unique([firmId, date]))
 - **New enums**: `AlertType` (INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE, COMPLIANCE_DEADLINE, DOCUMENT_ANOMALY, SYSTEM_ALERT, DEADLINE_DETECTED) + `Severity` (CRITICAL, HIGH, MEDIUM, LOW)
 - **Deadline extraction schema**: `extracted_deadlines` table (id, firmId, documentId, clientId, date, description, rawText, confidence, alertId; indexes on [firmId], [firmId,date], [documentId]); Document model extended with `deadlineExtracted Boolean` + `deadlineCount Int`
+- **Team invite schema**: `firm_invites` table (id, firmId, createdBy, token, email, role, usedBy, usedAt, expiresAt; indexes on [token], [firmId]); enables admin invite-link flow for associates to join existing firms
 
-### API Routes (9 Routers)
+### API Routes (11 Routers)
 
-| Router         | Mounted At       | Status  | Endpoints                                                                                                                               |
-| -------------- | ---------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `health.ts`    | `/api/health`    | ✅ Live | `GET /` — service status                                                                                                                |
-| `auth.ts`      | `/api/auth`      | ✅ Live | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`                                                                        |
-| `documents.ts` | `/api/documents` | ✅ Live | `GET /` (list), `GET /:id`, `GET /thread/:threadId` (thread summary), `POST /upload` (multer + extract/chunk), `DELETE /:id`            |
-| `chat.ts`      | `/api/chat`      | ✅ Live | `POST /` (RAG query with session support), `GET /history`, `POST /:queryId/feedback`                                                    |
-| `sync.ts`      | `/api/sync`      | ✅ Live | `POST /gmail`, `POST /drive` (with keyword filtering), `GET /status`, `POST /cancel/:jobId`                                             |
-| `drafts.ts`    | `/api/drafts`    | ✅ Live | `POST /` (generate), `POST /refine`, `POST /send` (Gmail Drafts API)                                                                    |
-| `clients.ts`   | `/api/clients`   | ✅ Live | `GET /` (list), `POST /` (create), `GET /:id` (detail), `GET /:id/summary` (snapshot + risk), `POST /:id/assign-docs`                   |
-| `admin.ts`     | `/api/admin`     | ✅ Live | `POST /cleanup-sessions`, `GET /firm-snapshot/:firmId`                                                                                  |
-| `dashboard.ts` | `/api/dashboard` | ✅ Live | `GET /command-centre` (full payload), `GET /briefing`, `GET /alerts` (paginated), `PATCH /alerts/:id/read`, `PATCH /alerts/:id/resolve` |
-| `deadlines.ts` | `/api/deadlines` | ✅ Live | `GET /` (paginated list + filters), `GET /calendar` (month grouped), `GET /export` (ICS file download)                                  |
+| Router                 | Mounted At               | Status  | Endpoints                                                                                                                               |
+| ---------------------- | ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `health.ts`            | `/api/health`            | ✅ Live | `GET /` — service status                                                                                                                |
+| `auth.ts`              | `/api/auth`              | ✅ Live | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`                                                                        |
+| `documents.ts`         | `/api/documents`         | ✅ Live | `GET /` (list), `GET /:id`, `GET /thread/:threadId` (thread summary), `POST /upload` (multer + extract/chunk), `DELETE /:id`            |
+| `chat.ts`              | `/api/chat`              | ✅ Live | `POST /` (RAG query with session support), `GET /history`, `POST /:queryId/feedback`                                                    |
+| `sync.ts`              | `/api/sync`              | ✅ Live | `POST /gmail`, `POST /drive` (with keyword filtering), `GET /status`, `POST /cancel/:jobId`                                             |
+| `drafts.ts`            | `/api/drafts`            | ✅ Live | `POST /` (generate), `POST /refine`, `POST /send` (Gmail Drafts API)                                                                    |
+| `clients.ts`           | `/api/clients`           | ✅ Live | `GET /` (list), `POST /` (create), `GET /:id` (detail), `GET /:id/summary` (snapshot + risk), `POST /:id/assign-docs`                   |
+| `admin.ts`             | `/api/admin`             | ✅ Live | `POST /cleanup-sessions`, `GET /firm-snapshot/:firmId`                                                                                  |
+| `dashboard.ts`         | `/api/dashboard`         | ✅ Live | `GET /command-centre` (full payload), `GET /briefing`, `GET /alerts` (paginated), `PATCH /alerts/:id/read`, `PATCH /alerts/:id/resolve` |
+| `deadlines.ts`         | `/api/deadlines`         | ✅ Live | `GET /` (paginated list + filters), `GET /calendar` (month grouped), `GET /export` (ICS file download)                                  |
+| `team.ts`              | `/api/team`              | ✅ Live | `POST /invites`, `GET /invites`, `DELETE /invites/:id`, `GET /members`, `DELETE /members/:id`, `GET /join/:token`, `POST /join/:token`  |
+| `telegram.ts`          | `/api/webhooks/telegram` | ✅ Live | `POST /` (webhook handler for Telegram updates)                                                                                         |
+| `telegram-settings.ts` | `/api/settings/telegram` | ✅ Live | `GET /status`, `POST /link-code`, `DELETE /unlink`, `PATCH /notifications`                                                              |
 
 ### Utilities & Middleware
 
@@ -170,6 +177,8 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`apps/web/src/app/(app)/drafts/page.tsx`** — AI email drafting: instruction textarea + client-ID filter + context toggle → `POST /api/drafts`; draft rendered in editable subject+body fields; Refine panel → `POST /api/drafts/refine`; Context Sources accordion; Copy-to-clipboard button with cost/latency metadata; **Save to Gmail** button: recipient email input → `POST /api/drafts/send` → success banner with Gmail draft ID
 - **`apps/web/src/app/(app)/dashboard/page.tsx`** — **NEW (Sprint 1):** Proactive AI Command Centre with 4 sections: daily briefing card (GPT-4o-mini summary), active alerts feed (mark-read/resolve actions), clients needing attention, recent activity (7 days); token usage display; auto-refresh every 5 minutes
 - **`apps/web/src/app/(app)/deadlines/page.tsx`** — **NEW (Sprint 2):** Compliance Deadlines page with calendar view (monthly grid, colour-coded dots), list view (filterable table), client filter dropdown, ICS export, side panel detail; CalendarClock nav icon in sidebar
+- **`apps/web/src/app/(app)/settings/team/page.tsx`** — **NEW (Sprint 3):** Team management page for admins to create/manage invite links, view team members, delete invites/members; conditional Team nav item visible only to admin users
+- **`apps/web/src/app/join/[token]/page.tsx`** — **NEW (Sprint 3):** Public invite acceptance page where associates can join firms via invite links; validates token, shows firm preview, handles account creation/joining
 
 ### Email Drafts
 
@@ -461,6 +470,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 | Proactive AI Command Centre     | 1 Mar 2026          | Daily briefings, alert detection (3 rules), dashboard API + frontend, BullMQ scheduler             |
 | Compliance Deadline Extraction  | 2 Mar 2026          | Regex + GPT-4o-mini hybrid pipeline; 25 compliance keywords; auto-creates DEADLINE_DETECTED alerts |
 | Deadline Calendar + List UI     | 2 Mar 2026          | Calendar/list toggle, client filter, colour coding (red/orange/green), ICS export, side panel      |
+| Team Invite System              | 2 Mar 2026          | Admin invite-link flow, 7-day expiry tokens, role-based access, public join page, team management  |
 
 ### Runtime Bugs Fixed (Previous Sessions)
 
@@ -671,6 +681,122 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - `deadline-extractor.test.ts` — 13 tests (`findDateMatches`: 7, `filterByComplianceKeywords`: 4, `extractDeadlinesFromDocument`: 7 including full pipeline with LLM mock)
 - `deadlines.test.ts` — 7 tests (paginated list, clientId filter, date range filter, confidence filter, calendar grouped, empty month, ICS export)
 - `schemas.test.ts` — 10 new tests for 4 deadline schemas (confidence validation, query defaults, filter validation, month bounds, object validation with relations)
+
+---
+
+## ✅ SPRINT 3 — TEAM INVITE SYSTEM (Completed 2 Mar 2026)
+
+**Goal:** Admin invite-link flow so associates can join existing firms — **DONE**
+
+### 3A. Database Migration ✅
+
+- Added `firm_invites` table with `id`, `firmId`, `createdBy`, `token`, `email`, `role`, `usedBy`, `usedAt`, `expiresAt`, `createdAt`
+- Added indexes: `[token]` (unique), `[firmId]` for efficient lookups
+- Updated `Firm` and `User` models with `invites` relation
+- Migration applied successfully
+
+### 3B. Backend — Team API Routes ✅
+
+- Created `apps/api/src/routes/team.ts` with 7 endpoints:
+  - `POST /api/team/invites` — create invite link (admin only)
+  - `GET /api/team/invites` — list active invites (admin only)
+  - `DELETE /api/team/invites/:id` — delete invite (admin only)
+  - `GET /api/team/members` — list team members
+  - `DELETE /api/team/members/:id` — remove team member (admin only)
+  - `GET /api/team/join/:token` — preview invite details (public)
+  - `POST /api/team/join/:token` — accept invite and join firm (public)
+- All endpoints properly secured with role-based access control
+- Invite tokens expire after 7 days, single-use only
+
+### 3C. Frontend — Team Management UI ✅
+
+- Created `apps/web/src/app/(app)/settings/team/page.tsx` for admin team management
+- Created `apps/web/src/app/join/[token]/page.tsx` for public invite acceptance
+- Updated `apps/web/src/components/app-nav.tsx` with conditional Team nav item (admin only)
+- Team page includes: invite link creation, member listing, invite management, member removal
+- Join page includes: firm preview, role display, account creation/joining flow
+
+### 3D. Shared Types & Schemas ✅
+
+- Added types to `packages/shared/src/types.ts`: `FirmInvite`, `TeamMember`, `InvitePreview`
+- Added Zod schemas for team management and invite validation
+- Proper validation for email addresses, roles, and token format
+
+---
+
+## ✅ SPRINT 4 — TELEGRAM BOT INTEGRATION (Completed 1 Mar 2026)
+
+**Goal:** Allow users to query firm data from Telegram for mobile-first access — **DONE**
+
+### 4A. Database Migration ✅
+
+- Added `telegram_links` table with `id`, `firmId`, `userId`, `telegramChatId`, `telegramUsername`, `alertsEnabled`, `linkedAt`, `isActive`
+- Added unique indexes: `[telegramChatId]`, `[userId]` for 1:1 user mapping
+- Migration applied successfully: `20260301152741_add_telegram_links`
+
+### 4B. Backend — Telegram Bot Library ✅
+
+- Created `apps/api/src/lib/telegram.ts` — Type-safe Telegram Bot API wrapper:
+  - API methods: `sendMessage()`, `sendChatAction()`, `answerCallbackQuery()`, `editMessageText()`, `setMyCommands()`, `setWebhook()`, `deleteWebhook()`, `getMe()`
+  - Helper functions: `parseCommand()`, `escapeHtml()`, `escapeMarkdownV2()`, `truncateMessage()`, `formatList()`, `createInlineKeyboard()`
+  - Webhook verification: `verifyWebhookSecret()` for X-Telegram-Bot-Api-Secret-Token header
+  - 44 unit tests covering all functions
+
+### 4C. Backend — Webhook Route ✅
+
+- Created `apps/api/src/routes/telegram.ts` with webhook handler:
+  - Rate limiting: 20 messages/hour per user (Redis sliding-window)
+  - Account linking: 6-char codes stored in Redis (10 min TTL)
+  - 8 command handlers:
+    - `/start` — Welcome message with bot capabilities
+    - `/help` — List available commands
+    - `/link <code>` — Link account using 6-char code from web UI
+    - `/unlink` — Unlink Telegram account
+    - `/ask <question>` — RAG query with firm context
+    - `/clients [page]` — Paginated client list with inline keyboard
+    - `/alerts` — Toggle alert notifications
+    - `/summary` — Get today's briefing and alert count
+  - Callback query handler for inline keyboard pagination
+
+### 4D. Backend — Settings API ✅
+
+- Created `apps/api/src/routes/telegram-settings.ts`:
+  - `GET /api/settings/telegram/status` — Link status and settings
+  - `POST /api/settings/telegram/link-code` — Generate 6-char code
+  - `DELETE /api/settings/telegram/unlink` — Remove link
+  - `PATCH /api/settings/telegram/notifications` — Toggle alerts
+
+### 4E. Frontend — Telegram Settings Page ✅
+
+- Created `apps/web/src/app/(app)/settings/telegram/page.tsx`:
+  - Connection status card (Connected/Not Connected badges)
+  - Link code generation with countdown timer
+  - Copy-to-clipboard button for code
+  - Step-by-step linking instructions with bot link
+  - Alerts toggle and unlink buttons
+  - Feature showcase cards for bot commands
+
+### 4F. Shared Types & Schemas ✅
+
+- Added types to `packages/shared/src/types.ts`: `TelegramLinkStatus`, `TelegramLinkCodeResponse`
+- Added Zod schemas: `telegramLinkStatusSchema`, `telegramLinkCodeResponseSchema`, `telegramNotificationsSchema`
+- 12 new tests for Telegram schemas
+
+### 4G. Environment Variables ✅
+
+- Added to `.env.example`:
+  ```
+  TELEGRAM_BOT_TOKEN=
+  TELEGRAM_BOT_USERNAME=
+  TELEGRAM_WEBHOOK_SECRET=
+  ```
+
+### Redis Key Conventions
+
+```
+telegram:link:{code}              TTL: 10 min (link codes)
+telegram:ratelimit:{chatId}:{date} TTL: 24 hr (rate limiting)
+```
 
 ---
 

@@ -314,6 +314,22 @@ export interface InvitePreview {
   email: string | null;
 }
 
+// ─── Telegram Integration ────────────────────────────
+
+export interface TelegramLinkStatus {
+  linked: boolean;
+  telegramChatId?: string;
+  telegramUsername?: string;
+  alertsEnabled: boolean;
+  linkedAt?: string;
+}
+
+export interface TelegramLinkCodeResponse {
+  code: string;
+  expiresIn: number;
+  botUsername: string;
+}
+
 // ─── API Responses ───────────────────────────────────
 
 export interface ApiResponse<T = unknown> {

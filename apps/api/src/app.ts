@@ -15,6 +15,8 @@ import { adminRouter } from "./routes/admin";
 import { dashboardRouter } from "./routes/dashboard";
 import { deadlinesRouter } from "./routes/deadlines";
 import { teamRouter } from "./routes/team";
+import { telegramRouter } from "./routes/telegram";
+import { telegramSettingsRouter } from "./routes/telegram-settings";
 
 const app: Express = express();
 
@@ -66,6 +68,8 @@ app.use("/api/admin", adminRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/deadlines", deadlinesRouter);
 app.use("/api/team", teamRouter);
+app.use("/api/settings/telegram", telegramSettingsRouter);
+app.use("/api/webhooks/telegram", telegramRouter);
 
 // ─── 404 catch-all ───────────────────────────────────
 app.use((_req, res) => {

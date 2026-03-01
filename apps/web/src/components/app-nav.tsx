@@ -16,6 +16,7 @@ import {
   LogOut,
   CalendarClock,
   UserPlus2,
+  Send,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -114,6 +115,27 @@ export function AppNav() {
               </Link>
             );
           })()}
+
+        {/* Telegram settings — all users */}
+        {(() => {
+          const active =
+            pathname === "/settings/telegram" ||
+            pathname.startsWith("/settings/telegram/");
+          return (
+            <Link
+              href="/settings/telegram"
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                active
+                  ? "bg-gray-800 text-white"
+                  : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200",
+              )}
+            >
+              <Send className="h-4 w-4 shrink-0" />
+              Telegram
+            </Link>
+          );
+        })()}
       </nav>
 
       {/* User info + logout */}

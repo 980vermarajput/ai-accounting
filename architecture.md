@@ -1,9 +1,9 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.5 — Updated 2026-03-02
+> **Version:** 2.6 — Updated 2026-03-01
 > **Author:** @980vermarajput
-> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + **Team Invite System**
-> **Related:** [PRD v2.5](./PRD.md)
+> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration**
+> **Related:** [PRD v2.6](./PRD.md)
 
 ---
 
@@ -43,6 +43,7 @@
 | P8  | **Monorepo, shared types**        | Single repo with shared TypeScript types between frontend and backend                                 |
 | P9  | **Smart conversation continuity** | Session-based chat with 3000-token context limit, intelligent trimming, auto-cleanup prevents bloat   |
 | P10 | **Real-time firm intelligence**   | AI can query live firm data via function calling — no static snapshots, always current                |
+| P11 | **Multi-channel access**          | Telegram bot extends RAG queries beyond web UI — query firm data on mobile via /ask command           |
 
 ---
 
@@ -53,10 +54,10 @@
 │                        EXTERNAL SYSTEMS                         │
 │                                                                 │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │  Google   │  │  Google   │  │  OpenAI  │  │    Stripe     │  │
-│  │  Gmail    │  │  Drive    │  │  API     │  │  (Billing)    │  │
-│  │  API      │  │  API      │  │          │  │               │  │
-│  └─────┬────┘  └─────┬────┘  └────┬─────┘  └──────┬────────┘  │
+│  │  Google   │  │  Google   │  │  OpenAI  │  │    Stripe     │  │  Telegram  │  │
+│  │  Gmail    │  │  Drive    │  │  API     │  │  (Billing)    │  │  Bot API   │  │
+│  │  API      │  │  API      │  │          │  │               │  │            │  │
+│  └─────┬────┘  └─────┬────┘  └────┬─────┘  └──────┬────────┘  └─────┬──────┘  │
 │        │             │            │                │            │
 └────────┼─────────────┼────────────┼────────────────┼────────────┘
          │             │            │                │
@@ -430,23 +431,24 @@ User       Frontend        API Server      PostgreSQL/pgvector    Redis Cache   
 
 ### 7.1 Schema Overview
 
-Our Prisma schema defines 13 core models with pgvector support and RLS:
+Our Prisma schema defines 14 core models with pgvector support and RLS:
 
-| Model                 | Purpose                                  | RLS Key | Relationships                                                                   |
-| --------------------- | ---------------------------------------- | ------- | ------------------------------------------------------------------------------- |
-| **Firm**              | Organization/tenant root                 | firm_id | 1→many Users, Clients, ChatSessions, Alerts, DailyBriefings, ExtractedDeadlines |
-| **User**              | Team members (admins, staff)             | firm_id | many←one Firm; 1→many SyncJobs                                                  |
-| **Client**            | Taxpayer/business entity                 | firm_id | many←one Firm; 1→many Documents, Alerts, ExtractedDeadlines                     |
-| **Document**          | Uploaded files (Gmail, Drive, manual)    | firm_id | many←one Firm, Client; 1→many Chunks, ExtractedDeadlines                        |
-| **Chunk**             | Text segments with embeddings            | firm_id | many←one Document; has vector(1536)                                             |
-| **Query**             | RAG chat queries + feedback              | firm_id | many←one User; has clientId foreign key                                         |
-| **SyncJob**           | Background sync status tracker           | firm_id | many←one User; tracks Gmail/Drive jobs; supports keyword filtering              |
-| **AuditLog**          | Compliance + access tracking             | firm_id | logs all data modifications                                                     |
-| **ChatSession**       | Conversation sessions (2hr expiry)       | firm_id | many←one Firm, User; 1→many ChatMessages; optional client context               |
-| **ChatMessage**       | Individual messages (user/assistant/sys) | N/A     | many←one ChatSession; tracks tokens, tools used, search results                 |
-| **Alert**             | Proactive notifications for firm         | firm_id | many←one Firm, Client; type + severity + read/resolve state                     |
-| **DailyBriefing**     | AI-generated daily firm summary          | firm_id | many←one Firm; @@unique([firmId, date]); JSON metadata                          |
-| **ExtractedDeadline** | Compliance deadlines from documents      | firm_id | many←one Firm, Document, Client; has Alert relation for notifications           |
+| Model                 | Purpose                                  | RLS Key | Relationships                                                                                  |
+| --------------------- | ---------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| **Firm**              | Organization/tenant root                 | firm_id | 1→many Users, Clients, ChatSessions, Alerts, DailyBriefings, ExtractedDeadlines, TelegramLinks |
+| **User**              | Team members (admins, staff)             | firm_id | many←one Firm; 1→many SyncJobs; 1→one TelegramLink (optional)                                  |
+| **Client**            | Taxpayer/business entity                 | firm_id | many←one Firm; 1→many Documents, Alerts, ExtractedDeadlines                                    |
+| **Document**          | Uploaded files (Gmail, Drive, manual)    | firm_id | many←one Firm, Client; 1→many Chunks, ExtractedDeadlines                                       |
+| **Chunk**             | Text segments with embeddings            | firm_id | many←one Document; has vector(1536)                                                            |
+| **Query**             | RAG chat queries + feedback              | firm_id | many←one User; has clientId foreign key                                                        |
+| **SyncJob**           | Background sync status tracker           | firm_id | many←one User; tracks Gmail/Drive jobs; supports keyword filtering                             |
+| **AuditLog**          | Compliance + access tracking             | firm_id | logs all data modifications                                                                    |
+| **ChatSession**       | Conversation sessions (2hr expiry)       | firm_id | many←one Firm, User; 1→many ChatMessages; optional client context                              |
+| **ChatMessage**       | Individual messages (user/assistant/sys) | N/A     | many←one ChatSession; tracks tokens, tools used, search results                                |
+| **Alert**             | Proactive notifications for firm         | firm_id | many←one Firm, Client; type + severity + read/resolve state                                    |
+| **DailyBriefing**     | AI-generated daily firm summary          | firm_id | many←one Firm; @@unique([firmId, date]); JSON metadata                                         |
+| **ExtractedDeadline** | Compliance deadlines from documents      | firm_id | many←one Firm, Document, Client; has Alert relation for notifications                          |
+| **TelegramLink**      | User Telegram account connections        | firm_id | many←one Firm; one←one User; unique telegramChatId; alertsEnabled flag                         |
 
 **Key Features:**
 
@@ -650,11 +652,119 @@ SyncJob created in DB + BullMQ job enqueued
 
 ---
 
+## 9.6 — Telegram Bot Architecture (Added Sprint 4)
+
+### Overview
+
+The Telegram Bot provides mobile-friendly RAG access via webhook-based message handling. Users link their Telegram account to their firm user account via a 6-digit code flow. **Alert push notifications** automatically send HIGH and CRITICAL alerts to linked users.
+
+### Architecture Diagram
+
+```
+┌──────────────────┐         ┌──────────────────┐         ┌────────────────┐
+│  Telegram User   │   ──▶   │  Telegram Bot    │   ──▶   │  API Server    │
+│  (mobile app)    │         │  API (external)  │ webhook │  /webhooks/    │
+└──────────────────┘         └──────────────────┘         │  telegram      │
+                                                          └───────┬────────┘
+                                                                  │
+                    ┌────────────────────────────────────────────┤
+                    │                                             │
+                    ▼                                             ▼
+           ┌────────────────┐                           ┌────────────────┐
+           │ Rate Limiter   │                           │ Command Router │
+           │ (Redis: 20/hr) │                           │ (8 commands)   │
+           └────────────────┘                           └────────┬───────┘
+                                                                 │
+        ┌──────────────────┬──────────────────┬─────────────────┼─────────────────┐
+        ▼                  ▼                  ▼                 ▼                 ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│ /start, /help│  │ /link, /unlink│  │ /ask <query> │  │ /clients     │  │ /summary     │
+│ (welcome)    │  │ (account link)│  │ (RAG pipeline)│  │ (pagination) │  │ (briefing)   │
+└──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+```
+
+### Account Linking Flow
+
+```
+User sends /link in Telegram
+  ↓
+Bot generates 6-digit code → stores in Redis (telegram:link:{code}, TTL 10 min)
+  ↓
+User enters code in Web UI (/settings/telegram)
+  ↓
+Web UI calls POST /api/telegram/link-code → validates code → creates TelegramLink
+  ↓
+Bot confirms link via sendMessage() → user can now use /ask, /clients, /summary
+```
+
+### Alert Push Notifications
+
+When HIGH or CRITICAL alerts are detected (by daily scheduler or deadline extraction), they are automatically pushed to Telegram:
+
+```
+[Alert Detection] → detectAlertsForFirm() creates alert
+  ↓
+pushAlertToTelegram(firmId, alert)
+  ↓
+Query TelegramLink WHERE firmId AND alertsEnabled = true
+  ↓
+For each linked user → sendMessage() with formatted alert
+  ↓
+User receives: 🚨 CRITICAL Alert or ⚠️ HIGH Alert
+```
+
+**Alert Types Pushed:**
+
+- `INVOICE_OVERDUE` — HIGH severity (45+ days overdue)
+- `CLIENT_SILENT` — HIGH severity (60+ days no activity)
+- `HIGH_RISK_LANGUAGE` — HIGH severity (risky keywords detected)
+- `DEADLINE_DETECTED` — varies by extraction confidence
+
+**Message Format:**
+
+```
+🚨 CRITICAL Alert
+
+Invoice overdue — ABC Corp
+
+Client "ABC Corp" has an invoice (INV-2025-042.pdf) with no
+follow-up activity in the last 45 days. Consider sending a reminder.
+
+Type: INVOICE OVERDUE
+```
+
+### Key Components
+
+| Component                | File                           | Purpose                                                        |
+| ------------------------ | ------------------------------ | -------------------------------------------------------------- |
+| **Telegram API Wrapper** | `lib/telegram.ts`              | sendMessage, setWebhook, parseCommand, etc.                    |
+| **Webhook Handler**      | `routes/telegram.ts`           | POST endpoint, secret verification, command router             |
+| **Settings API**         | `routes/telegram-settings.ts`  | GET status, POST link-code, DELETE unlink, PATCH notifications |
+| **Alert Push**           | `lib/alert-detector.ts`        | pushAlertToTelegram() sends HIGH/CRITICAL alerts               |
+| **Frontend Settings**    | `app/(app)/settings/telegram/` | Link status, code generation, alerts toggle                    |
+
+### Redis Keys
+
+| Key Pattern                          | TTL    | Purpose                           |
+| ------------------------------------ | ------ | --------------------------------- |
+| `telegram:link:{6-digit-code}`       | 10 min | Stores userId for account linking |
+| `telegram:ratelimit:{chatId}:{date}` | 24 hr  | Message count for rate limiting   |
+
+### Security
+
+- **Webhook secret**: Verified via `X-Telegram-Bot-Api-Secret-Token` header (set during `setWebhook()`)
+- **Rate limiting**: 20 messages/hour per Telegram chat (prevents abuse)
+- **Account linking**: Requires authenticated web session + 6-digit code (no direct Telegram auth)
+- **Firm isolation**: All data queries filter by user's `firmId` (RLS enforced)
+- **Alert opt-out**: Users can disable alerts via `/alerts` command or web UI toggle
+
+---
+
 ## 10 — API Architecture
 
 ### 10.1 Route Organization
 
-All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **34 total endpoints** across 9 routers:
+All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envelope. **39 total endpoints** across 11 routers:
 
 #### **Auth Routes** (`/api/auth/*` — 4 endpoints)
 
@@ -714,6 +824,17 @@ All routes mounted under `/api/` prefix with standardized `ApiResponse<T>` envel
 #### **Health Route** (`/api/health` — 1 endpoint)
 
 - `GET /` — Service status probe (returns `{ status, service, version, uptime }`)
+
+#### **Telegram Routes** (`/api/telegram/*` — 4 endpoints + webhook)
+
+- `GET /status` — Check user's Telegram link status (linked, chatId, alertsEnabled) (✅ Live)
+- `POST /link-code` — Generate 6-digit link code with 10-min Redis TTL (✅ Live)
+- `DELETE /unlink` — Unlink Telegram account from user (✅ Live)
+- `PATCH /notifications` — Toggle alert notifications on/off (✅ Live)
+
+#### **Webhook Route** (`/api/webhooks/telegram` — 1 endpoint)
+
+- `POST /` — Receives Telegram bot updates, verified via `X-Telegram-Bot-Api-Secret-Token` header, handles 8 commands (/start, /help, /link, /unlink, /ask, /clients, /alerts, /summary), rate limited to 20 msg/hr per user (✅ Live)
 
 ### 10.2 Middleware Stack
 
