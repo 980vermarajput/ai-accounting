@@ -31,6 +31,10 @@ export class ApiError extends Error {
     return new ApiError(404, code, message);
   }
 
+  static gone(message = "Resource no longer available", code = "GONE") {
+    return new ApiError(410, code, message);
+  }
+
   static conflict(message: string, code = "CONFLICT") {
     return new ApiError(409, code, message);
   }
@@ -49,10 +53,7 @@ export class ApiError extends Error {
     return new ApiError(503, code, message);
   }
 
-  static internal(
-    message = "Internal server error",
-    code = "INTERNAL_SERVER_ERROR",
-  ) {
+  static internal(message = "Internal server error", code = "INTERNAL_SERVER_ERROR") {
     return new ApiError(500, code, message);
   }
 }

@@ -21,7 +21,14 @@ authRouter.use(rateLimitPublic);
 // ─── GET /api/auth/google — redirect to Google OAuth consent ─────
 authRouter.get("/google", (req: Request, res: Response, next: NextFunction) => {
   try {
-    const url = buildGoogleAuthUrl();
+    // If an invite token is passed as ?invite=, encode it in the OAuth state
+    // so it survives the Google redirect roundtrip
+    const inviteToken = req.query.invite;
+    let state: string | undefined;
+    if (typeof inviteToken === "string" && inviteToken.length > 0) {
+      state = Buffer.from(JSON.stringify({ invite: inviteToken })).toString("base64");
+    }
+    const url = buildGoogleAuthUrl(state);
     res.redirect(url);
   } catch (err) {
     next(err);
@@ -54,44 +61,102 @@ authRouter.get(
       // 3. Encrypt refresh token before storing
       const encryptedRefreshToken = encrypt(googleTokens.refreshToken);
 
-      // 4. Upsert user — find by email, or create with a new firm
+      // 4a. Decode optional invite token from OAuth state
+      let inviteToken: string | undefined;
+      if (req.query.state && typeof req.query.state === "string") {
+        try {
+          const decoded = JSON.parse(
+            Buffer.from(req.query.state, "base64").toString(),
+          ) as { invite?: string };
+          inviteToken = decoded.invite;
+        } catch {
+          // Malformed state — ignore, fall through to normal flow
+        }
+      }
+
+      // 4b. Upsert user — find by email, or create with a new firm (or join via invite)
       let user = await prisma.user.findUnique({
         where: { email: profile.email },
         include: { firm: true },
       });
 
       if (!user) {
-        // First-ever login — create a new firm + user together
-        const slug = profile.email
-          .split("@")[0]
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "-");
+        // ── Invite flow: join existing firm ──
+        if (inviteToken) {
+          const invite = await prisma.firmInvite.findUnique({
+            where: { token: inviteToken },
+            include: { firm: true },
+          });
 
-        // Ensure slug uniqueness by appending a short random suffix if needed
-        const uniqueSlug = `${slug}-${Date.now().toString(36)}`;
+          if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
+            return res.redirect(`${frontendUrl}/auth/error?reason=invite_invalid`);
+          }
+          if (invite.email && invite.email !== profile.email) {
+            return res.redirect(`${frontendUrl}/auth/error?reason=invite_email_mismatch`);
+          }
 
-        const newFirm = await prisma.firm.create({
-          data: {
-            name: `${profile.name}'s Firm`,
-            slug: uniqueSlug,
-            users: {
-              create: {
-                email: profile.email,
-                name: profile.name,
-                role: "admin",
-                googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+          // Create the user under the invited firm
+          const newUser = await prisma.user.create({
+            data: {
+              firmId: invite.firmId,
+              email: profile.email,
+              name: profile.name,
+              role: invite.role,
+              googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+            },
+          });
+
+          // Mark invite as consumed
+          await prisma.firmInvite.update({
+            where: { id: invite.id },
+            data: { usedBy: newUser.id, usedAt: new Date() },
+          });
+
+          user = await prisma.user.findUnique({
+            where: { id: newUser.id },
+            include: { firm: true },
+          });
+
+          if (!user) throw new Error("Failed to fetch user after invite acceptance");
+
+          logger.authEvent({
+            userId: newUser.id,
+            firmId: invite.firmId,
+            event: "invite_accepted",
+            ipAddress: req.ip,
+          });
+        } else {
+          // ── Normal flow: create a new firm ──
+          const slug = profile.email
+            .split("@")[0]
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-");
+          const uniqueSlug = `${slug}-${Date.now().toString(36)}`;
+
+          const newFirm = await prisma.firm.create({
+            data: {
+              name: `${profile.name}'s Firm`,
+              slug: uniqueSlug,
+              users: {
+                create: {
+                  email: profile.email,
+                  name: profile.name,
+                  role: "admin",
+                  googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+                },
               },
             },
-          },
-          include: { users: true },
-        });
+            include: { users: true },
+          });
+          void newFirm; // used for side effect
 
-        user = await prisma.user.findUnique({
-          where: { email: profile.email },
-          include: { firm: true },
-        });
+          user = await prisma.user.findUnique({
+            where: { email: profile.email },
+            include: { firm: true },
+          });
 
-        if (!user) throw new Error("Failed to create user after firm creation");
+          if (!user) throw new Error("Failed to create user after firm creation");
+        }
       } else {
         // Returning user — update their refresh token
         await prisma.user.update({

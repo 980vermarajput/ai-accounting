@@ -15,6 +15,7 @@ import {
   Mail,
   LogOut,
   CalendarClock,
+  UserPlus2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -92,6 +93,27 @@ export function AppNav() {
             </Link>
           );
         })}
+
+        {/* Team settings — admin only */}
+        {user?.role === "admin" &&
+          (() => {
+            const active =
+              pathname === "/settings/team" || pathname.startsWith("/settings/team/");
+            return (
+              <Link
+                href="/settings/team"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  active
+                    ? "bg-gray-800 text-white"
+                    : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200",
+                )}
+              >
+                <UserPlus2 className="h-4 w-4 shrink-0" />
+                Team
+              </Link>
+            );
+          })()}
       </nav>
 
       {/* User info + logout */}

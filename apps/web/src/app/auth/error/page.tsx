@@ -10,6 +10,10 @@ const REASON_MESSAGES: Record<string, string> = {
   access_denied: "You denied access on the Google consent screen.",
   missing_code: "The authorization code was missing from the callback.",
   no_token: "No authentication token was returned.",
+  invite_invalid: "This invite link is invalid or has already been used.",
+  invite_expired: "This invite link has expired. Ask an admin to send a new one.",
+  invite_email_mismatch:
+    "This invite was sent to a different email address. Please sign in with the correct Google account.",
 };
 
 function ErrorContent() {

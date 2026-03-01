@@ -211,3 +211,24 @@ export const commandCentreResponseSchema = z.object({
     cap: z.number(),
   }),
 });
+
+// ─── Team / Invite Schemas ───────────────────────────────────────────────────
+
+export const createInviteSchema = z.object({
+  email: z.string().email("Invalid email address").optional(),
+  role: z.enum(["admin", "member"]).default("member"),
+});
+export type CreateInviteInput = z.infer<typeof createInviteSchema>;
+
+export const updateMemberRoleSchema = z.object({
+  role: z.enum(["admin", "member"]),
+});
+export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
+
+export const invitePreviewSchema = z.object({
+  firmName: z.string(),
+  inviterName: z.string(),
+  role: z.enum(["admin", "member"]),
+  expiresAt: z.string(),
+});
+export type InvitePreviewOutput = z.infer<typeof invitePreviewSchema>;

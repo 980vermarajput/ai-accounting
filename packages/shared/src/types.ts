@@ -283,6 +283,37 @@ export interface CommandCentreResponse {
   };
 }
 
+// ─── Team & Invites ──────────────────────────────────
+
+export interface FirmInvite {
+  id: string;
+  firmId: string;
+  createdBy: string;
+  token: string;
+  email: string | null;
+  role: UserRole;
+  usedBy: string | null;
+  usedAt: Date | null;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  createdAt: Date;
+}
+
+export interface InvitePreview {
+  firmName: string;
+  inviterName: string;
+  role: UserRole;
+  expiresAt: Date;
+  email: string | null;
+}
+
 // ─── API Responses ───────────────────────────────────
 
 export interface ApiResponse<T = unknown> {

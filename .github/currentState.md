@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 2 March 2026 (14:00 UTC)
-**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction — All 248 Tests Passing (180 API + 68 Shared)
+**Last Updated:** 2 March 2026 (12:00 UTC)
+**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + **Team Invite System** — All Tests Passing — **Sprint 3 Complete**
 
 ---
 
@@ -53,6 +53,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - ✅ **BullMQ Scheduler:** Daily cron at 07:00 IST (01:30 UTC) for alert detection + briefing generation
 - ✅ **Deadline Extraction:** Regex + GPT-4o-mini hybrid pipeline extracts compliance deadlines from document chunks, creates DEADLINE_DETECTED alerts
 - ✅ **Deadline Calendar UI:** Calendar + list view with client filter, colour coding (past due/upcoming/future), ICS export, side panel detail view
+- ✅ **Team Invite System:** Admin invite-link flow so associates can join an existing firm — schema migration applied, `/api/team` router (7 endpoints), public `/join` page, admin `/settings/team` page, conditional Team nav item for admins
 
 ---
 

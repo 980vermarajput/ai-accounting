@@ -96,6 +96,7 @@ model Firm {
   alerts        Alert[]
   briefings     DailyBriefing[]
   extractedDeadlines ExtractedDeadline[]
+  invites       FirmInvite[]
 
   @@map("firms")
 }
@@ -121,6 +122,8 @@ model User {
   syncJobs     SyncJob[]
   clients      Client[]
   chatSessions ChatSession[]
+  invitesCreated  FirmInvite[] @relation("InviteCreator")
+  invitesAccepted FirmInvite[] @relation("InviteAcceptor")
 
   @@index([firmId])
   @@map("users")
@@ -407,4 +410,27 @@ model DailyBriefing {
   @@unique([firmId, date])
   @@index([firmId])
   @@map("daily_briefings")
+}
+
+// ─── Firm Invites ─────────────────────────────────────────────────────
+
+model FirmInvite {
+  id        String    @id @default(cuid())
+  firmId    String    @map("firm_id") @db.Uuid
+  createdBy String    @map("created_by") @db.Uuid
+  token     String    @unique @db.VarChar(64)
+  email     String?   @db.VarChar(255)
+  role      UserRole  @default(member)
+  usedBy    String?   @map("used_by") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz()
+  usedAt    DateTime? @map("used_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  firm       Firm  @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  creator    User  @relation("InviteCreator", fields: [createdBy], references: [id])
+  usedByUser User? @relation("InviteAcceptor", fields: [usedBy], references: [id])
+
+  @@index([firmId])
+  @@index([token])
+  @@map("firm_invites")
 }

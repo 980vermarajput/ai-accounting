@@ -14,6 +14,7 @@ import { clientsRouter } from "./routes/clients";
 import { adminRouter } from "./routes/admin";
 import { dashboardRouter } from "./routes/dashboard";
 import { deadlinesRouter } from "./routes/deadlines";
+import { teamRouter } from "./routes/team";
 
 const app: Express = express();
 
@@ -64,6 +65,7 @@ app.use("/api/clients", clientsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/deadlines", deadlinesRouter);
+app.use("/api/team", teamRouter);
 
 // ─── 404 catch-all ───────────────────────────────────
 app.use((_req, res) => {

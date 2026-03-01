@@ -31,9 +31,8 @@ class Logger {
 
     if (this.env === "development") {
       // Human-readable format for development
-      const contextStr = Object.keys(context).length > 0
-        ? ` | ${JSON.stringify(context)}`
-        : "";
+      const contextStr =
+        Object.keys(context).length > 0 ? ` | ${JSON.stringify(context)}` : "";
       console.log(`[${level.toUpperCase()}] ${message}${contextStr}`);
     } else {
       // Structured JSON for production
@@ -75,7 +74,7 @@ class Logger {
     this.info("RAG query completed", {
       ...context,
       operation: "rag_query",
-      type: "performance_metric"
+      type: "performance_metric",
     });
   }
 
@@ -90,7 +89,7 @@ class Logger {
     this.info("Token usage recorded", {
       ...context,
       operation: "token_usage",
-      type: "cost_metric"
+      type: "cost_metric",
     });
   }
 
@@ -107,21 +106,21 @@ class Logger {
     this.info("Sync job update", {
       ...context,
       operation: "sync_job",
-      type: "job_metric"
+      type: "job_metric",
     });
   }
 
   authEvent(context: {
     userId?: string;
     firmId?: string;
-    event: "login" | "logout" | "token_refresh" | "auth_failure";
+    event: "login" | "logout" | "token_refresh" | "auth_failure" | "invite_accepted";
     reason?: string;
     ipAddress?: string;
   }): void {
     this.info("Authentication event", {
       ...context,
       operation: "auth_event",
-      type: "security_metric"
+      type: "security_metric",
     });
   }
 
@@ -135,7 +134,7 @@ class Logger {
     this.info("Business metric recorded", {
       ...context,
       operation: "business_metric",
-      type: "business_metric"
+      type: "business_metric",
     });
   }
 }

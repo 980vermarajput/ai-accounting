@@ -1,8 +1,8 @@
 # MVP PRD — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.3 — Updated 2026-03-02
+> **Version:** 2.5 — Updated 2026-03-02
 > **Author:** @980vermarajput
-> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction Live — All 248 Tests Passing (180 API + 68 Shared)
+> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction + **Team Invite System** Live — All Tests Passing — **Sprint 3 Complete**
 
 ---
 
@@ -49,17 +49,18 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### ✅ In Scope
 
-| Feature              | Description                                                |
-| -------------------- | ---------------------------------------------------------- |
-| **Google OAuth**     | Gmail + Drive read-only access via OAuth 2.0 with PKCE     |
-| **Text Extraction**  | PDF (OCR fallback), DOCX, XLSX/CSV, plain text, `.eml`     |
-| **RAG Chat**         | Ask questions → get grounded answers with source citations |
-| **Draft Email**      | Compose replies in professional CA tone with action items  |
-| **Admin Dashboard**  | Sync status, user management, data freshness indicators    |
-| **Command Centre**   | Proactive daily briefings, alert detection, dashboard UI   |
-| **Multi-tenancy**    | Firm-level data isolation with row-level security          |
-| **Audit Logging**    | Every query, every chunk sent to LLM, every user action    |
-| **Billing (simple)** | Stripe Checkout for per-seat monthly billing               |
+| Feature              | Description                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| **Google OAuth**     | Gmail + Drive read-only access via OAuth 2.0 with PKCE                                |
+| **Text Extraction**  | PDF (OCR fallback), DOCX, XLSX/CSV, plain text, `.eml`                                |
+| **RAG Chat**         | Ask questions → get grounded answers with source citations                            |
+| **Draft Email**      | Compose replies in professional CA tone with action items                             |
+| **Admin Dashboard**  | Sync status, user management, data freshness indicators                               |
+| **Command Centre**   | Proactive daily briefings, alert detection, dashboard UI                              |
+| **Multi-tenancy**    | Firm-level data isolation with row-level security                                     |
+| **Audit Logging**    | Every query, every chunk sent to LLM, every user action                               |
+| **Billing (simple)** | Stripe Checkout for per-seat monthly billing                                          |
+| **Team Invite**      | Admin-generated invite links so associates can join a firm without creating a new one |
 
 ### ❌ Out of Scope (Future Phases)
 
@@ -69,6 +70,7 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 - Mobile native app (responsive web only for MVP)
 - Slack / WhatsApp integrations
 - Custom model fine-tuning
+- SSO / SAML (enterprise identity providers)
 
 ---
 
@@ -220,6 +222,25 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | started_at          | TIMESTAMPTZ                                   |          |
 | completed_at        | TIMESTAMPTZ                                   |          |
 | created_at          | TIMESTAMPTZ                                   |          |
+
+### `firm_invites` (✅ Complete — Sprint 3 — 2 Mar 2026)
+
+| Column     | Type                   | Notes                                           |
+| ---------- | ---------------------- | ----------------------------------------------- |
+| id         | CUID PK                |                                                 |
+| firm_id    | FK → firms.id          | Which firm the invite belongs to                |
+| created_by | FK → users.id          | Admin who created the invite                    |
+| token      | VARCHAR(64) UNIQUE     | Cryptographically random token (hex-encoded)    |
+| email      | VARCHAR(255) NULLABLE  | Pre-filled target email (optional)              |
+| role       | ENUM('admin','member') | Role the invitee will receive, default 'member' |
+| used_by    | FK → users.id NULLABLE | Set once invite is consumed                     |
+| expires_at | TIMESTAMPTZ            | 7-day TTL from creation                         |
+| used_at    | TIMESTAMPTZ NULLABLE   | Set on acceptance                               |
+| created_at | TIMESTAMPTZ            |                                                 |
+
+**Indexes:** `[token]` (unique lookup), `[firmId]`, `[firmId, usedAt]`
+
+---
 
 ### `alerts` (Added Sprint 1 — 1 Mar 2026)
 
@@ -422,6 +443,18 @@ Document → Text Extraction → Normalization → Dedup Check
   "sources_used": ["d_111", "d_234"]
 }
 ```
+
+### Team Management (✅ Complete — Sprint 3 — 2 Mar 2026)
+
+| Method | Endpoint                           | Description                       | Status  |
+| ------ | ---------------------------------- | --------------------------------- | ------- |
+| GET    | `/api/team/members`                | List all firm users               | ✅ Live |
+| GET    | `/api/team/invites/preview/:token` | Preview invite details (PUBLIC)   | ✅ Live |
+| POST   | `/api/team/invites`                | Create invite link (admin only)   | ✅ Live |
+| GET    | `/api/team/invites`                | List pending invites (admin only) | ✅ Live |
+| DELETE | `/api/team/invites/:id`            | Revoke invite (admin only)        | ✅ Live |
+| PATCH  | `/api/team/members/:userId/role`   | Change member role (admin only)   | ✅ Live |
+| DELETE | `/api/team/members/:userId`        | Remove member (admin only)        | ✅ Live |
 
 ### Admin
 
@@ -679,7 +712,9 @@ Click "Draft Reply" → Modal opens with:
 | 9–10 | **Chat UI & Email Draft** | Chat interface, conversation history, draft email modal, client sidebar                       | ✅ Done    |
 | 11   | **Admin & Polish**        | Admin dashboard, audit logs, usage stats, sync status UI, error handling                      | ✅ Done    |
 | 11+  | **Command Centre**        | Proactive AI Command Centre: alert detection, daily briefings, dashboard UI, BullMQ scheduler | ✅ Done    |
-| 12   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection            | ⏳ Pending |
+| 12   | **Deadline Extraction**   | Compliance deadline extraction pipeline, calendar UI, ICS export, alert integration           | ✅ Done    |
+| 12+  | **Team Invite System**    | Admin invite links, OAuth state-based invite flow, team management UI, role management        | ✅ Done    |
+| 13   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection            | ⏳ Pending |
 
 ---
 
