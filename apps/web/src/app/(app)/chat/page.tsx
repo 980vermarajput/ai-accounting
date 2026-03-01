@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "../../../lib/api";
 import type {
   ApiResponse,
@@ -337,11 +338,16 @@ function ThinkingIndicator() {
 // ─── Chat page ───────────────────────────────────────────────────
 
 export default function ChatPage() {
+  const searchParams = useSearchParams();
+  const clientId = searchParams.get("clientId");
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isAsking, setIsAsking] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [clientInfo, setClientInfo] = useState<{ name: string; emailDomain?: string } | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -363,6 +369,29 @@ export default function ChatPage() {
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  // ── Load client info if clientId is provided ────────────────
+  useEffect(() => {
+    const loadClientInfo = async () => {
+      if (!clientId) return;
+
+      try {
+        const res = await apiFetch<ApiResponse<{ client: { name: string; emailDomain?: string } }>>(
+          `/api/clients/${clientId}/summary`
+        );
+        if (res.success && res.data) {
+          setClientInfo({
+            name: res.data.client.name,
+            emailDomain: res.data.client.emailDomain
+          });
+        }
+      } catch {
+        // Silent fail - client context is optional
+      }
+    };
+
+    void loadClientInfo();
+  }, [clientId]);
 
   // ── Auto-scroll ──────────────────────────────────────────────
   useEffect(() => {
@@ -387,10 +416,20 @@ export default function ChatPage() {
       try {
         const res = await apiFetch<ApiResponse<ChatResponse>>("/api/chat", {
           method: "POST",
-          body: JSON.stringify({ query: q }),
+          body: JSON.stringify({
+            query: q,
+            ...(sessionId && { sessionId }),
+            ...(clientId && { clientId })
+          }),
         });
 
         const data = res.data!;
+
+        // Update session ID for conversation continuity
+        if (data.sessionId && data.sessionId !== sessionId) {
+          setSessionId(data.sessionId);
+        }
+
         setMessages((prev) => [
           ...prev,
           {
@@ -505,6 +544,24 @@ export default function ChatPage() {
 
       {/* ── Main chat area ──────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Client Context Banner */}
+        {clientInfo && (
+          <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-blue-600">👤</span>
+              <span className="text-blue-800 font-medium">
+                Asking about: {clientInfo.name}
+              </span>
+              {clientInfo.emailDomain && (
+                <span className="text-blue-600">({clientInfo.emailDomain})</span>
+              )}
+              <span className="text-blue-600 text-xs ml-auto">
+                Questions will focus on documents from this client
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {messages.length === 0 && !isAsking && (

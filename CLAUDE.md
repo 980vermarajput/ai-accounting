@@ -5,7 +5,7 @@ Production-ready SaaS platform providing AI-powered document analysis, RAG chat,
 ## Tech Stack
 
 - **Backend**: Node.js 20 + Express.js + TypeScript + Prisma ORM
-- **Database**: PostgreSQL 16 + pgvector extension for vector similarity search
+- **Database**: PostgreSQL 16 + pgvector extension for vector similarity search + chat session management
 - **Frontend**: Next.js 14 + React 18 + Tailwind CSS
 - **AI/ML**: OpenAI GPT-4o-mini + text-embedding-3-small (1536 dimensions)
 - **Queue/Cache**: Redis 7 + BullMQ for background jobs
@@ -35,7 +35,7 @@ Production-ready SaaS platform providing AI-powered document analysis, RAG chat,
 ### Key Directories
 
 - **`apps/api/src/routes/`**: REST API endpoints with multi-tenant security (auth.ts:24, chat.ts:35, documents.ts:42)
-- **`apps/api/src/lib/`**: Core business logic (rag.ts for RAG pipeline, token-usage.ts for cost protection)
+- **`apps/api/src/lib/`**: Core business logic (rag.ts for RAG pipeline, token-usage.ts for cost protection, chat-context.ts for conversation memory)
 - **`apps/api/src/middleware/`**: Express middleware (auth.ts for JWT+Redis, validate.ts for Zod schemas)
 - **`apps/api/src/workers/`**: Background job processors for Gmail sync, document extraction, embedding generation
 - **`apps/web/src/app/`**: Next.js 14 app router structure with TypeScript + Tailwind
@@ -77,7 +77,7 @@ Check these files for specialized information:
 - **`.github/currentState.md`**: Complete implementation status, test results, and production readiness assessment
 - **`architecture.md`**: Comprehensive system architecture, C4 diagrams, and technical specifications
 - **`PRD.md`**: Product requirements, feature specifications, and business context
-- **`apps/api/prisma/schema.prisma`**: Complete database schema with RLS multi-tenancy (8 tables, pgvector support)
+- **`apps/api/prisma/schema.prisma`**: Complete database schema with RLS multi-tenancy (10 tables, pgvector support, conversation memory)
 - **`turbo.json`**: Turborepo task orchestration and build pipeline configuration
 
 ## Key Features Implemented
@@ -87,6 +87,8 @@ Check these files for specialized information:
 - Gmail/Drive sync with BullMQ background workers and processing guardrails
 - Document extraction pipeline (PDF/DOCX/XLSX) → chunking → vector embedding
 - RAG chat system with pgvector similarity search and GPT-4o-mini
+- **Smart conversation memory with intelligent token management and auto-cleanup**
+- **Real-time LLM tools for firm analytics, client details, and document assignment**
 - AI email drafting with context grounding and Gmail API integration
 - Cost protection: per-firm token caps, query limits, spend tracking
 - Security hardening: JWT blacklist (fail-closed), enhanced CSP headers, structured logging

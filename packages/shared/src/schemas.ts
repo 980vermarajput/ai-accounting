@@ -22,6 +22,7 @@ export type DocumentListQuery = z.infer<typeof documentListQuerySchema>;
 // ─── Chat / RAG Schemas ─────────────────────────────
 
 export const chatRequestSchema = z.object({
+  sessionId: z.string().uuid().optional(), // Optional for new conversations
   clientId: z.string().uuid().optional(),
   query: z.string().min(1, "Query cannot be empty").max(5000, "Query too long"),
   filters: z

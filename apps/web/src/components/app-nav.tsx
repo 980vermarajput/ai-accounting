@@ -7,6 +7,7 @@ import { useUser } from "../contexts/user-context";
 const NAV_ITEMS = [
   { href: "/chat", label: "Chat", emoji: "💬" },
   { href: "/documents", label: "Documents", emoji: "📄" },
+  { href: "/clients", label: "Clients", emoji: "👥" },
   { href: "/sync", label: "Sync", emoji: "🔄" },
   { href: "/drafts", label: "Drafts", emoji: "✉️" },
 ];

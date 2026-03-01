@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../../../lib/api";
 import type { PaginatedResponse, ApiResponse } from "@ai-accounting/shared";
+import { ThreadViewer } from "@/components/thread-viewer";
 
 // ─── Local types ─────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ interface DocumentRow {
   errorMessage: string | null;
   sourceDate: string;
   createdAt: string;
+  gmailThreadId?: string;
 }
 
 interface SyncStatus {
@@ -95,6 +97,7 @@ export default function DocumentsPage() {
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [syncingDrive, setSyncingDrive] = useState(false);
   const [activeJobs, setActiveJobs] = useState<SyncStatus["activeJobs"]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
   const PAGE_SIZE = 20;
 
@@ -327,6 +330,9 @@ export default function DocumentsPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
                   Excerpt
                 </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -369,6 +375,18 @@ export default function DocumentsPage() {
                       <span className="text-xs text-gray-300">—</span>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    {doc.source === "gmail" && doc.gmailThreadId ? (
+                      <button
+                        onClick={() => setSelectedThreadId(doc.gmailThreadId || null)}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline"
+                      >
+                        View Thread
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -397,6 +415,18 @@ export default function DocumentsPage() {
             >
               Next →
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Thread Viewer Modal */}
+      {selectedThreadId && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <ThreadViewer
+              threadId={selectedThreadId}
+              onClose={() => setSelectedThreadId(null)}
+            />
           </div>
         </div>
       )}

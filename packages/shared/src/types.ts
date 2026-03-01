@@ -81,6 +81,7 @@ export interface DocumentEntities {
 export type Feedback = "positive" | "negative" | "none";
 
 export interface ChatRequest {
+  sessionId?: string; // Optional for new conversations
   clientId?: string;
   query: string;
   filters?: {
@@ -108,6 +109,7 @@ export interface ConfidenceInfo {
 
 export interface ChatResponse {
   queryId: string;
+  sessionId: string; // Include session ID for client tracking
   answer: string;
   sources: ChatSource[];
   suggestedFollowups: string[];
