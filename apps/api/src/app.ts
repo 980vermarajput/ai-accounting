@@ -17,6 +17,8 @@ import { deadlinesRouter } from "./routes/deadlines";
 import { teamRouter } from "./routes/team";
 import { telegramRouter } from "./routes/telegram";
 import { telegramSettingsRouter } from "./routes/telegram-settings";
+import { platformAdminRouter } from "./routes/platform-admin-minimal";
+import { metricsMiddleware } from "./middleware/metrics";
 
 const app: Express = express();
 
@@ -56,6 +58,9 @@ app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
+// Add metrics middleware for all API routes
+app.use(metricsMiddleware);
+
 // ─── Routes ──────────────────────────────────────────
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
@@ -65,6 +70,7 @@ app.use("/api/sync", syncRouter);
 app.use("/api/drafts", draftsRouter);
 app.use("/api/clients", clientsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/platform-admin", platformAdminRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/deadlines", deadlinesRouter);
 app.use("/api/team", teamRouter);

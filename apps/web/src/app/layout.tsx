@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { UserProvider } from "../contexts/user-context";
+import { AdminProvider } from "../contexts/admin-context";
 
 export const metadata: Metadata = {
   title: "AI Assistant for Accountants",
@@ -12,7 +13,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-surface-secondary antialiased">
-        <UserProvider>{children}</UserProvider>
+        <UserProvider>
+          <AdminProvider>
+            {children}
+          </AdminProvider>
+        </UserProvider>
       </body>
     </html>
   );

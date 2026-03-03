@@ -19,6 +19,7 @@ export interface UserWithFirm {
   email: string;
   name: string;
   role: "admin" | "member";
+  isAdmin?: boolean;
   lastSyncAt: string | null;
   firm: {
     id: string;

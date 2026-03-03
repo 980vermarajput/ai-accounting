@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 3 March 2026 (10:00 UTC)
-**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules** — All 304 Tests Passing — **Sprint 5 Complete**
+**Last Updated:** 3 March 2026 (11:35 UTC)
+**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules** + **Platform Admin Dashboard** — All 304 Tests Passing — **Sprint 5 Complete + Platform Admin Complete**
 
 ---
 
@@ -16,6 +16,8 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 **🧠 SMART CONVERSATION MEMORY LIVE:** Session-based chat continuity, 3000-token context limit with intelligent trimming, automatic session management (2-hour expiry), real-time firm analytics accessible to AI via function calling.
 
 **📱 TELEGRAM BOT INTEGRATION:** Chat with AICA from Telegram for quick queries, client lookups, daily summaries, and real-time alerts — account linking via 6-char codes, 20 msg/hr rate limiting.
+
+**🛡️ PLATFORM ADMIN DASHBOARD:** Complete cross-firm administration interface with purple/blue theme — overview dashboard, firm management, usage & cost monitoring, sync failure tracking, user management, performance metrics, platform settings. Separate authentication flow outside firm context.
 
 ### Quick Status
 
@@ -57,6 +59,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - ✅ **Deadline Calendar UI:** Calendar + list view with client filter, colour coding (past due/upcoming/future), ICS export, side panel detail view
 - ✅ **Team Invite System:** Admin invite-link flow so associates can join an existing firm — `firm_invites` schema migration applied, `/api/team` router (7 endpoints), public `/join/:token` page, admin `/settings/team` page, conditional Team nav item for admins only
 - ✅ **Telegram Bot Integration:** Query firm data from Telegram — account linking via 6-char codes, 8 commands (/ask, /clients, /summary, /alerts, /link, /unlink, /help, /start), webhook handler, settings API, frontend settings page
+- ✅ **Platform Admin Dashboard:** Complete admin interface outside firm context — platform overview, cross-firm management, usage monitoring, sync failure tracking, user management, performance metrics, platform settings. Purple/blue themed UI with admin authentication flow and Redis-based metrics collection.
 
 ---
 
@@ -67,8 +70,8 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 | Package                 | Status  | Purpose                                                                                                                        |
 | ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `@ai-accounting/shared` | ✅ Live | TypeScript types + Zod validation schemas, exported from barrel file                                                           |
-| `@ai-accounting/api`    | ✅ Live | Express server, 10 routers (health/auth/docs/chat/sync/drafts/clients/admin/dashboard/deadlines), error handler, Prisma client |
-| `@ai-accounting/web`    | ✅ Live | Next.js app, landing page, Tailwind CSS setup, API health check UI                                                             |
+| `@ai-accounting/api`    | ✅ Live | Express server, 12 routers (health/auth/docs/chat/sync/drafts/clients/admin/platform-admin/dashboard/deadlines/team/telegram), error handler, Prisma client |
+| `@ai-accounting/web`    | ✅ Live | Next.js app, firm UI + admin dashboard, Tailwind CSS setup, dual authentication contexts (firm/admin)                         |
 
 ### Database & ORM
 
@@ -84,24 +87,26 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **New enums**: `AlertType` (INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE, COMPLIANCE_DEADLINE, DOCUMENT_ANOMALY, SYSTEM_ALERT, DEADLINE_DETECTED, GST_FILING_DUE, TDS_PAYMENT_DUE, ITR_FILING_DUE, MISSING_DOCUMENTS, DOCUMENT_EXPIRY — **11 values total**) + `Severity` (CRITICAL, HIGH, MEDIUM, LOW)
 - **Deadline extraction schema**: `extracted_deadlines` table (id, firmId, documentId, clientId, date, description, rawText, confidence, alertId; indexes on [firmId], [firmId,date], [documentId]); Document model extended with `deadlineExtracted Boolean` + `deadlineCount Int`
 - **Team invite schema**: `firm_invites` table (id, firmId, createdBy, token, email, role, usedBy, usedAt, expiresAt; indexes on [token], [firmId]); enables admin invite-link flow for associates to join existing firms
+- **Platform admin schema**: `isAdmin` boolean flag added to User model; enables cross-firm platform administration; separate from firm-level admin role
 
-### API Routes (11 Routers)
+### API Routes (12 Routers)
 
-| Router                 | Mounted At               | Status  | Endpoints                                                                                                                               |
-| ---------------------- | ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `health.ts`            | `/api/health`            | ✅ Live | `GET /` — service status                                                                                                                |
-| `auth.ts`              | `/api/auth`              | ✅ Live | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`                                                                        |
-| `documents.ts`         | `/api/documents`         | ✅ Live | `GET /` (list), `GET /:id`, `GET /thread/:threadId` (thread summary), `POST /upload` (multer + extract/chunk), `DELETE /:id`            |
-| `chat.ts`              | `/api/chat`              | ✅ Live | `POST /` (RAG query with session support), `GET /history`, `POST /:queryId/feedback`                                                    |
-| `sync.ts`              | `/api/sync`              | ✅ Live | `POST /gmail`, `POST /drive` (with keyword filtering), `GET /status`, `POST /cancel/:jobId`                                             |
-| `drafts.ts`            | `/api/drafts`            | ✅ Live | `POST /` (generate), `POST /refine`, `POST /send` (Gmail Drafts API)                                                                    |
-| `clients.ts`           | `/api/clients`           | ✅ Live | `GET /` (list), `POST /` (create), `GET /:id` (detail), `GET /:id/summary` (snapshot + risk), `POST /:id/assign-docs`                   |
-| `admin.ts`             | `/api/admin`             | ✅ Live | `POST /cleanup-sessions`, `GET /firm-snapshot/:firmId`                                                                                  |
-| `dashboard.ts`         | `/api/dashboard`         | ✅ Live | `GET /command-centre` (full payload), `GET /briefing`, `GET /alerts` (paginated), `PATCH /alerts/:id/read`, `PATCH /alerts/:id/resolve` |
-| `deadlines.ts`         | `/api/deadlines`         | ✅ Live | `GET /` (paginated list + filters), `GET /calendar` (month grouped), `GET /export` (ICS file download)                                  |
-| `team.ts`              | `/api/team`              | ✅ Live | `POST /invites`, `GET /invites`, `DELETE /invites/:id`, `GET /members`, `DELETE /members/:id`, `GET /join/:token`, `POST /join/:token`  |
-| `telegram.ts`          | `/api/webhooks/telegram` | ✅ Live | `POST /` (webhook handler for Telegram updates)                                                                                         |
-| `telegram-settings.ts` | `/api/settings/telegram` | ✅ Live | `GET /status`, `POST /link-code`, `DELETE /unlink`, `PATCH /notifications`                                                              |
+| Router                    | Mounted At               | Status  | Endpoints                                                                                                                               |
+| ------------------------- | ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `health.ts`               | `/api/health`            | ✅ Live | `GET /` — service status                                                                                                                |
+| `auth.ts`                 | `/api/auth`              | ✅ Live | `GET /google`, `GET /google/callback`, `POST /logout`, `GET /me`                                                                        |
+| `documents.ts`            | `/api/documents`         | ✅ Live | `GET /` (list), `GET /:id`, `GET /thread/:threadId` (thread summary), `POST /upload` (multer + extract/chunk), `DELETE /:id`            |
+| `chat.ts`                 | `/api/chat`              | ✅ Live | `POST /` (RAG query with session support), `GET /history`, `POST /:queryId/feedback`                                                    |
+| `sync.ts`                 | `/api/sync`              | ✅ Live | `POST /gmail`, `POST /drive` (with keyword filtering), `GET /status`, `POST /cancel/:jobId`                                             |
+| `drafts.ts`               | `/api/drafts`            | ✅ Live | `POST /` (generate), `POST /refine`, `POST /send` (Gmail Drafts API)                                                                    |
+| `clients.ts`              | `/api/clients`           | ✅ Live | `GET /` (list), `POST /` (create), `GET /:id` (detail), `GET /:id/summary` (snapshot + risk), `POST /:id/assign-docs`                   |
+| `admin.ts`                | `/api/admin`             | ✅ Live | `POST /cleanup-sessions`, `GET /firm-snapshot/:firmId`                                                                                  |
+| `platform-admin-minimal.ts` | `/api/platform-admin`    | ✅ Live | `GET /firms` (cross-firm list), `GET /usage` (global metrics), `GET /sync-failures` (platform failures)                               |
+| `dashboard.ts`            | `/api/dashboard`         | ✅ Live | `GET /command-centre` (full payload), `GET /briefing`, `GET /alerts` (paginated), `PATCH /alerts/:id/read`, `PATCH /alerts/:id/resolve` |
+| `deadlines.ts`            | `/api/deadlines`         | ✅ Live | `GET /` (paginated list + filters), `GET /calendar` (month grouped), `GET /export` (ICS file download)                                  |
+| `team.ts`                 | `/api/team`              | ✅ Live | `POST /invites`, `GET /invites`, `DELETE /invites/:id`, `GET /members`, `DELETE /members/:id`, `GET /join/:token`, `POST /join/:token`  |
+| `telegram.ts`             | `/api/webhooks/telegram` | ✅ Live | `POST /` (webhook handler for Telegram updates)                                                                                         |
+| `telegram-settings.ts`    | `/api/settings/telegram` | ✅ Live | `GET /status`, `POST /link-code`, `DELETE /unlink`, `PATCH /notifications`                                                              |
 
 ### Utilities & Middleware
 
@@ -109,6 +114,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **ApiError class** — typed HTTP errors with factory methods (400/401/403/404/409/429/500)
 - **Zod validation middleware** — request body schema checking
 - **Auth middleware** — JWT from HttpOnly cookie (`__session`) or `Authorization: Bearer` header; Redis JWT blacklist (fail-closed); dev bypass blocked in production
+- **Admin auth middleware** — Platform admin authentication that bypasses firm context; checks `isAdmin` flag; provides cross-firm access for admin dashboard
 - **Rate limiter** — Redis sliding-window: per-user 60/hr + per-firm 500/hr (authenticated), per-IP 30/min (public endpoints like auth)
 - **Error handler** — global error-to-ApiResponse envelope
 - **Cookie-parser** — parses `__session` HttpOnly cookie for JWT auth

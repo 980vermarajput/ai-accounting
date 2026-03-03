@@ -1,9 +1,9 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.7 — Updated 2026-03-03
+> **Version:** 2.8 — Updated 2026-03-03
 > **Author:** @980vermarajput
-> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules**
-> **Related:** [PRD v2.7](./PRD.md)
+> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules** + **Platform Admin Dashboard**
+> **Related:** [PRD v2.8](./PRD.md)
 
 ---
 

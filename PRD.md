@@ -1,8 +1,8 @@
 # MVP PRD — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.7 — Updated 2026-03-03
+> **Version:** 2.8 — Updated 2026-03-03
 > **Author:** @980vermarajput
-> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules** Live — All Tests Passing — **Sprint 5 Complete**
+> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules** + **Platform Admin Dashboard** Live — All Tests Passing — **Sprint 5 + Platform Admin Complete**
 
 ---
 
@@ -80,7 +80,7 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 | Layer               | Technology                                        | Notes                                                        |
 | ------------------- | ------------------------------------------------- | ------------------------------------------------------------ |
-| **Frontend**        | Next.js 14 (App Router)                           | SSR + React Server Components, Tailwind CSS                  |
+| **Frontend**        | Next.js 14 (App Router)                           | SSR + React Server Components, Tailwind CSS, firm UI + admin dashboard                  |
 | **Backend API**     | Node.js 20 + Express.js                           | TypeScript, modular route handlers                           |
 | **Background Jobs** | BullMQ + Redis                                    | Email sync, Drive sync, chunking, embedding, daily scheduler |
 | **Database**        | PostgreSQL 16 + pgvector                          | RLS for multi-tenancy, vector similarity search              |
@@ -115,7 +115,8 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | firm_id                  | FK → firms.id          | Multi-tenancy key     |
 | email                    | VARCHAR(255) UNIQUE    |                       |
 | name                     | VARCHAR(255)           |                       |
-| role                     | ENUM('admin','member') |                       |
+| role                     | ENUM('admin','member') | Firm-level role       |
+| is_admin                 | BOOLEAN DEFAULT FALSE  | Platform admin flag   |
 | google_refresh_token_enc | BYTEA                  | AES-256-GCM encrypted |
 | google_token_iv          | BYTEA                  | Initialization vector |
 | last_sync_at             | TIMESTAMPTZ            |                       |
@@ -836,7 +837,7 @@ Click "Draft Reply" → Modal opens with:
 | D7  | Chunking + embedding pipeline                                     | Backend     |
 | D8  | RAG chat endpoint with source citations                           | Backend     |
 | D9  | Email draft endpoint                                              | Backend     |
-| D10 | Next.js frontend (dashboard, chat, admin)                         | Frontend    |
+| D10 | Next.js frontend (dashboard, chat, admin, platform admin)         | Frontend    |
 | D11 | Audit logging middleware                                          | Backend     |
 | D12 | Unit + integration + E2E test suites                              | Engineering |
 | D13 | CI/CD pipeline (GitHub Actions)                                   | DevOps      |

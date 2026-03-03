@@ -314,6 +314,7 @@ authRouter.get(
           email: true,
           name: true,
           role: true,
+          isAdmin: true,
           lastSyncAt: true,
           firm: {
             select: { id: true, name: true, slug: true, plan: true },

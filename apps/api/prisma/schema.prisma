@@ -115,6 +115,7 @@ model User {
   email                  String    @unique @db.VarChar(255)
   name                   String    @db.VarChar(255)
   role                   UserRole  @default(member)
+  isAdmin                Boolean   @default(false) @map("is_admin") // Platform admin flag
   googleRefreshTokenEnc  Bytes?    @map("google_refresh_token_enc")
   googleTokenIv          Bytes?    @map("google_token_iv")
   lastSyncAt             DateTime? @map("last_sync_at") @db.Timestamptz()
