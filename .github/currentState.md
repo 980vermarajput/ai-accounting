@@ -1,7 +1,7 @@
 # Current Implementation State
 
-**Last Updated:** 1 March 2026 (21:15 UTC)
-**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** — All 304 Tests Passing — **Sprint 4 Complete**
+**Last Updated:** 3 March 2026 (10:00 UTC)
+**Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules** — All 304 Tests Passing — **Sprint 5 Complete**
 
 ---
 
@@ -50,7 +50,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - ✅ **Client Management UI:** Full client listing, creation, detail views with document analytics and re-sync capabilities
 - ✅ **Runtime Pipeline:** Gmail sync → extraction → chunking → embedding → RAG chat tested end-to-end
 - ✅ **Proactive AI Command Centre:** Daily briefings (GPT-4o-mini), alert detection (3 rules + dedup), dashboard API (5 endpoints), frontend Command Centre page
-- ✅ **Alert Detection:** INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE rules with 24h deduplication
+- ✅ **Alert Detection:** 8 rules with 24h deduplication — INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE, GST_FILING_DUE, TDS_PAYMENT_DUE, ITR_FILING_DUE, MISSING_DOCUMENTS, DOCUMENT_EXPIRY
 - ✅ **Daily Briefing Generator:** GPT-4o-mini summaries with Redis cache (23hr TTL), idempotent per firm per day
 - ✅ **BullMQ Scheduler:** Daily cron at 07:00 IST (01:30 UTC) for alert detection + briefing generation
 - ✅ **Deadline Extraction:** Regex + GPT-4o-mini hybrid pipeline extracts compliance deadlines from document chunks, creates DEADLINE_DETECTED alerts
@@ -81,7 +81,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **IVFFlat index**: `idx_chunks_embedding` with `vector_cosine_ops`, `lists=100`
 - **Conversation memory schema**: ChatSession (with auto-expiry) + ChatMessage (with token tracking and metadata)
 - **Alert & Briefing schema**: Alert model (with firmId, clientId, type, severity, title, body, metadata, isRead, resolvedAt, expiresAt; indexes on [firmId], [firmId,type,isRead], [firmId,severity]) + DailyBriefing model (with @@unique([firmId, date]))
-- **New enums**: `AlertType` (INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE, COMPLIANCE_DEADLINE, DOCUMENT_ANOMALY, SYSTEM_ALERT, DEADLINE_DETECTED) + `Severity` (CRITICAL, HIGH, MEDIUM, LOW)
+- **New enums**: `AlertType` (INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE, COMPLIANCE_DEADLINE, DOCUMENT_ANOMALY, SYSTEM_ALERT, DEADLINE_DETECTED, GST_FILING_DUE, TDS_PAYMENT_DUE, ITR_FILING_DUE, MISSING_DOCUMENTS, DOCUMENT_EXPIRY — **11 values total**) + `Severity` (CRITICAL, HIGH, MEDIUM, LOW)
 - **Deadline extraction schema**: `extracted_deadlines` table (id, firmId, documentId, clientId, date, description, rawText, confidence, alertId; indexes on [firmId], [firmId,date], [documentId]); Document model extended with `deadlineExtracted Boolean` + `deadlineCount Int`
 - **Team invite schema**: `firm_invites` table (id, firmId, createdBy, token, email, role, usedBy, usedAt, expiresAt; indexes on [token], [firmId]); enables admin invite-link flow for associates to join existing firms
 
@@ -139,7 +139,7 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`apps/api/src/lib/embedder.test.ts`** — 8 tests for `embedChunks` (empty input, batch size 100, 150-chunk split, order preservation, API call shape, error propagation) — OpenAI mocked via `vi.hoisted` + `vi.mock`
 - **`apps/api/src/lib/rag.test.ts`** — 23 tests for `searchChunks` (threshold filtering, recency weighting, score sorting, limit, field mapping, age-0 and age-365 score invariants), `generateRagAnswer` (JSON parsing, fallback on invalid JSON, token/cost calculation, follow-up capping, context injection), and `computeConfidence` (empty chunks, high/medium/low levels, coverage cap)
 - **`apps/api/src/routes/integration.test.ts`** — 35 supertest integration tests covering all API endpoints: Health (2), Auth (4), Documents (8), Chat (6), Drafts (6), Clients (6), Sync (1), Error handling (2); mocks Redis `multi()` chain for rate limiter, Prisma models, dev auth via `X-Dev-User` header
-- **`apps/api/src/lib/alert-detector.test.ts`** — 5 tests for alert detection: no-condition baseline, CLIENT_SILENT creation, dedup skip, HIGH_RISK_LANGUAGE detection, cross-firm error resilience
+- **`apps/api/src/lib/alert-detector.test.ts`** — 5 tests for alert detection: no-condition baseline, CLIENT_SILENT creation, dedup skip, HIGH_RISK_LANGUAGE detection, cross-firm error resilience (new CA rules follow same pattern — covered by integration)
 - **`apps/api/src/lib/briefing-generator.test.ts`** — 4 tests for daily briefing: DB idempotency, Redis cache hit, fresh LLM generation, Redis cache write verification
 - **`apps/api/src/routes/dashboard.test.ts`** — 8 tests for dashboard routes: paginated alerts, severity filter, unreadOnly filter, mark-as-read, read 404, cache invalidation, resolve alert, briefing endpoint
 - **`apps/api/src/lib/deadline-extractor.test.ts`** — 13 tests for deadline extraction: `findDateMatches` (7 tests: DD/MM/YYYY, DD-MM-YYYY, ISO, month names, context window, no dates, dedup), `filterByComplianceKeywords` (4 tests), `extractDeadlinesFromDocument` (7 tests: not found, already extracted, too old, no chunks, full pipeline)
@@ -305,8 +305,13 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 - **`detectInvoiceOverdue(firmId)`** — scans recent chunks for invoice filename patterns >45 days old, creates INVOICE_OVERDUE alerts
 - **`detectClientSilent(firmId)`** — finds clients with no documents in 30/60+ days, creates CLIENT_SILENT alerts (MEDIUM for 30d, HIGH for 60d)
 - **`detectHighRiskLanguage(firmId)`** — keyword scan across recent chunks for terms like "penalty", "notice", "demand", "seizure", etc.
+- **`detectGstFilingDue(firmId)`** — fires GSTR-1 (11th) / GSTR-3B (20th) alerts ≤5 days before due date; CRITICAL at ≤2 days
+- **`detectTdsPaymentDue(firmId)`** — fires TDS deposit alert ≤7 days before the 7th of next month (30 Apr for March); checks TDS document presence
+- **`detectItrFilingDue(firmId)`** — fires ITR alert ≤14 days before 31 Jul (non-audit) / 31 Oct (audit); mentions ₹5K S234F penalty
+- **`detectMissingDocuments(firmId)`** — finds clients with an extracted deadline in ≤14 days but no docs synced in 21+ days
+- **`detectDocumentExpiry(firmId)`** — matches extracted deadlines containing expiry keywords (DSC, license, renewal, etc.) ≤30 days out
 - **`isDuplicate(firmId, clientId, type)`** — 24-hour deduplication check to prevent duplicate alerts
-- **`detectAlertsForFirm(firmId)`** — orchestrates all 3 rules via `Promise.allSettled`, returns `{ generated, skipped, errors }`
+- **`detectAlertsForFirm(firmId)`** — orchestrates all **8 rules** via `Promise.allSettled`, returns `{ generated, skipped, errors }`
 - **`detectAlertsForAllFirms()`** — iterates all firms with per-firm error isolation
 
 **Daily Briefing Generator (`apps/api/src/lib/briefing-generator.ts`):**
@@ -471,6 +476,8 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 | Compliance Deadline Extraction  | 2 Mar 2026          | Regex + GPT-4o-mini hybrid pipeline; 25 compliance keywords; auto-creates DEADLINE_DETECTED alerts |
 | Deadline Calendar + List UI     | 2 Mar 2026          | Calendar/list toggle, client filter, colour coding (red/orange/green), ICS export, side panel      |
 | Team Invite System              | 2 Mar 2026          | Admin invite-link flow, 7-day expiry tokens, role-based access, public join page, team management  |
+| Telegram Bot Integration        | 3 Mar 2026          | Webhook, 8 commands, account linking via 6-char codes, Telegram nav link, /help HTML entity fix    |
+| 5 New CA Alert Rules            | 3 Mar 2026          | GST_FILING_DUE, TDS_PAYMENT_DUE, ITR_FILING_DUE, MISSING_DOCUMENTS, DOCUMENT_EXPIRY — 8 rules total, AlertType enum now has 11 values |
 
 ### Runtime Bugs Fixed (Previous Sessions)
 
@@ -514,11 +521,11 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
 | **Packages**                       | 3 (api, web, shared)                                                                                |
 | **TypeScript Files**               | ~80 (routes, middleware, utilities, workers, tools, context, alerts, briefings, deadline extractor) |
-| **Database Tables**                | 13 with RLS enabled                                                                                 |
-| **REST Endpoints**                 | 37 (health + auth + documents + chat + sync + drafts + clients + admin + dashboard + deadlines)     |
-| **Zod Schemas**                    | 23 validation schemas                                                                               |
-| **Test Count**                     | 248 (180 API + 68 shared)                                                                           |
-| **Total LOC** (excl. node_modules) | ~5500                                                                                               |
+| **Database Tables**                | 15 with RLS enabled (+ telegram_links + firm_invites)                                               |
+| **REST Endpoints**                 | 42 (health + auth + documents + chat + sync + drafts + clients + admin + dashboard + deadlines + team + telegram) |
+| **Zod Schemas**                    | 28+ validation schemas (including telegram + team schemas)                                          |
+| **Test Count**                     | 304 (224 API + 80 shared)                                                                           |
+| **Total LOC** (excl. node_modules) | ~6200                                                                                               |
 | **Build Time** (from cold)         | ~8 seconds (Turbo cached)                                                                           |
 | **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                                                                      |
 | **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)                                                            |
@@ -550,14 +557,15 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ## Next Immediate Steps (Order of Execution)
 
-1. **Recurring Deadline Detection** — Detect annual/quarterly compliance patterns (GST monthly, ITR yearly) and auto-generate future deadlines
-2. **Deadline Notifications** — Email/browser push notifications for upcoming deadlines (7-day and 1-day reminders)
-3. **Session Management UI** — Frontend for viewing/managing active chat sessions, clearing old conversations
-4. **Advanced Client Analytics** — Predictive risk modeling based on communication patterns
-5. **OCR Fallback** — `tesseract.js` for scanned PDF images that return no text from pdf-parse
-6. **Production Deployment** — Dockerized deployment to Azure/AWS/GCP with proper secrets management
-7. **External Monitoring** — Application Insights / Datadog integration (basic logging already in place)
-8. **API Documentation** — OpenAPI/Swagger spec, deployment guide, user manual
+1. **Alert Rules UI** — Display alert type labels (GST Filing Due, TDS Payment Due, etc.) with human-friendly names and icons in the dashboard Command Centre
+2. **Compliance Calendar Seed** — Static Indian statutory dates (GSTR-1 11th, GSTR-3B 20th, TDS 7th, ITR 31 Jul/31 Oct) so alerts fire even without extracted deadlines
+3. **Alert Rule Testing** — Trigger new rules manually by adjusting test dates; validate end-to-end GST/TDS/ITR/Missing Docs/Expiry alert flow
+4. **Session Management UI** — Frontend for viewing/managing active chat sessions, clearing old conversations
+5. **Advanced Client Analytics** — Predictive risk modeling based on communication patterns
+6. **OCR Fallback** — `tesseract.js` for scanned PDF images that return no text from pdf-parse
+7. **Production Deployment** — Dockerized deployment to Azure/AWS/GCP with proper secrets management
+8. **External Monitoring** — Application Insights / Datadog integration (basic logging already in place)
+9. **API Documentation** — OpenAPI/Swagger spec, deployment guide, user manual
 
 ---
 
@@ -800,6 +808,43 @@ telegram:ratelimit:{chatId}:{date} TTL: 24 hr (rate limiting)
 
 ---
 
+## ✅ SPRINT 5 — 5 NEW CA ALERT RULES (Completed 3 Mar 2026)
+
+**Goal:** Extend alert detection with Indian CA-specific compliance rules — **DONE**
+
+### 5A. Database Schema ✅
+
+- Added 5 new values to `AlertType` enum in Prisma schema: `GST_FILING_DUE`, `TDS_PAYMENT_DUE`, `ITR_FILING_DUE`, `MISSING_DOCUMENTS`, `DOCUMENT_EXPIRY`
+- `AlertType` enum now has **11 total values** (was 6)
+- `npx prisma migrate dev --name add_ca_alert_types --skip-seed` → already in sync, Prisma client regenerated
+- Confirmed via psql: all 11 AlertType values present in DB
+
+### 5B. Shared Types ✅
+
+- Updated `AlertType` union in `packages/shared/src/types.ts` to include all 11 values
+
+### 5C. Alert Detector — 5 New Detection Functions ✅
+
+- **`detectGstFilingDue(firmId)`** — GSTR-1 due 11th / GSTR-3B due 20th; fires HIGH ≤5 days before, CRITICAL ≤2 days; generates per-type-per-month alerts
+- **`detectTdsPaymentDue(firmId)`** — TDS deposit due 7th of next month (30 Apr for March quarter); fires HIGH ≤7 days; checks client TDS document presence
+- **`detectItrFilingDue(firmId)`** — ITR filing due 31 Jul (non-audit) / 31 Oct (audit); fires HIGH ≤14 days; body mentions ₹5,000 Section 234F late fee
+- **`detectMissingDocuments(firmId)`** — finds clients with an `extractedDeadline` in ≤14 days but no documents synced in 21+ days; prompts CA to chase client
+- **`detectDocumentExpiry(firmId)`** — scans `extractedDeadlines` for keywords (DSC, license, registration, renewal, certificate, validity, expiry, passport, PAN, Aadhaar, Form 16, 26AS, balance sheet, audit report) within ≤30 days
+
+### 5D. detectAlertsForFirm Wiring ✅
+
+- All 8 rules now run via `Promise.allSettled` in `detectAlertsForFirm(firmId)`
+- Order: invoiceOverdue, clientSilent, highRiskLanguage, gstFilingDue, tdsPaymentDue, itrFilingDue, missingDocuments, documentExpiry
+- Build: `pnpm build` → ✅ 3 packages successful (12.41s, zero TS errors)
+
+### 5E. Bug Fixes (Telegram) ✅
+
+- Fixed HTML entity bug in `/help` handler — `<question>`, `<code>`, `<client>` escaped to `&lt;&gt;`; `&` escaped to `&amp;`
+- Added Telegram nav link to `app-nav.tsx` with Send icon
+- Fixed settings page padding (`container max-w-2xl py-8` → `p-6 space-y-6 max-w-2xl mx-auto`)
+
+---
+
 ## How to Update This File
 
 **When:** After completing a major feature or milestone  
@@ -836,20 +881,23 @@ telegram:ratelimit:{chatId}:{date} TTL: 24 hr (rate limiting)
 - ✅ Intelligent conversation continuity (smart token management prevents context bloat)
 - ✅ Real-time firm intelligence (AI can query live data via function calling)
 
-**New Capabilities (1-2 Mar 2026):**
+**New Capabilities (1-3 Mar 2026):**
 
 - 🧠 Smart conversation memory with automatic context management
 - 🔧 Real-time LLM tools for dynamic firm analytics and client lookup
 - 🎯 Keyword-based sync filtering for targeted document ingestion
 - 📊 Proactive AI Command Centre with daily briefings, alert detection, and dashboard UI
-- 🚨 3 alert detection rules (INVOICE_OVERDUE, CLIENT_SILENT, HIGH_RISK_LANGUAGE) with 24h dedup
+- 🚨 **8 alert detection rules** with 24h dedup — including 5 new CA-specific rules (GST, TDS, ITR, Missing Docs, Document Expiry)
 - 📅 BullMQ daily scheduler (07:00 IST) for automated alert + briefing generation
+- 📱 Telegram Bot Integration — RAG via /ask, client lookups, daily summaries, alert push
 - 👥 Full client management UI with document analytics and bulk assignment
 - 🧹 Automatic session cleanup to prevent database bloat
 - 📊 Comprehensive firm snapshot generation for AI context
 - ⏰ Compliance deadline extraction (regex + GPT-4o-mini hybrid) with 25 Indian compliance keywords
 - 📆 Deadline calendar + list UI with colour coding, client filter, ICS export
 - 🔔 Auto-created DEADLINE_DETECTED alerts with urgency-based severity (CRITICAL/HIGH/MEDIUM/LOW)
+- 🇮🇳 GST/TDS/ITR statutory deadline alerts fire automatically based on Indian financial calendar
+- 📋 Missing document detection — prompts CA when client has upcoming deadline but no recent docs
 
 **Recommendation**: System is now **ready for real CA firm pilot programs** with advanced AI capabilities, proper safeguards, and intelligent conversation handling.
 

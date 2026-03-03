@@ -1,8 +1,8 @@
 # MVP PRD — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.6 — Updated 2026-03-01
+> **Version:** 2.7 — Updated 2026-03-03
 > **Author:** @980vermarajput
-> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** Live — All Tests Passing — **Sprint 4 Complete**
+> **Status:** MVP Core Complete — Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules** Live — All Tests Passing — **Sprint 5 Complete**
 
 ---
 
@@ -62,6 +62,7 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | **Billing (simple)** | Stripe Checkout for per-seat monthly billing                                          |
 | **Team Invite**      | Admin-generated invite links so associates can join a firm without creating a new one |
 | **Telegram Bot**     | Query firm data via Telegram — /ask for RAG, /clients list, /summary, /alerts toggle  |
+| **CA Alert Rules**   | 5 Indian CA-specific alert rules: GST filing due, TDS payment due, ITR filing due, missing documents, document expiry |
 
 ### ❌ Out of Scope (Future Phases)
 
@@ -250,7 +251,7 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 | id          | CUID PK                                                                                                                                  |                   |
 | firm_id     | FK → firms.id                                                                                                                            | RLS partition key |
 | client_id   | FK → clients.id                                                                                                                          | Nullable          |
-| type        | ENUM('INVOICE_OVERDUE','CLIENT_SILENT','HIGH_RISK_LANGUAGE','COMPLIANCE_DEADLINE','DOCUMENT_ANOMALY','SYSTEM_ALERT','DEADLINE_DETECTED') |                   |
+| type        | ENUM('INVOICE_OVERDUE','CLIENT_SILENT','HIGH_RISK_LANGUAGE','DEADLINE_DETECTED','SYNC_FAILURE','TOKEN_CAP_WARNING','GST_FILING_DUE','TDS_PAYMENT_DUE','ITR_FILING_DUE','MISSING_DOCUMENTS','DOCUMENT_EXPIRY') | 11 values |
 | severity    | ENUM('CRITICAL','HIGH','MEDIUM','LOW')                                                                                                   |                   |
 | title       | VARCHAR(255)                                                                                                                             |                   |
 | body        | TEXT                                                                                                                                     | Nullable          |
@@ -529,7 +530,7 @@ Document → Text Extraction → Normalization → Dedup Check
 
 - HIGH and CRITICAL alerts are automatically pushed to linked Telegram accounts
 - Users must have `alertsEnabled = true` (default) to receive push alerts
-- Alert types: `INVOICE_OVERDUE`, `CLIENT_SILENT`, `HIGH_RISK_LANGUAGE`, `DEADLINE_DETECTED`
+- Alert types supported (all 8 active detection rules): `INVOICE_OVERDUE`, `CLIENT_SILENT`, `HIGH_RISK_LANGUAGE`, `DEADLINE_DETECTED`, `GST_FILING_DUE`, `TDS_PAYMENT_DUE`, `ITR_FILING_DUE`, `MISSING_DOCUMENTS`, `DOCUMENT_EXPIRY`
 - Format: Emoji (🚨/⚠️) + severity + title + body + type
 
 ---
@@ -762,7 +763,8 @@ Click "Draft Reply" → Modal opens with:
 | 11+  | **Command Centre**        | Proactive AI Command Centre: alert detection, daily briefings, dashboard UI, BullMQ scheduler | ✅ Done    |
 | 12   | **Deadline Extraction**   | Compliance deadline extraction pipeline, calendar UI, ICS export, alert integration           | ✅ Done    |
 | 12+  | **Team Invite System**    | Admin invite links, OAuth state-based invite flow, team management UI, role management        | ✅ Done    |
-| 13   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection            | ⏳ Pending |
+| 13   | **CA Alert Rules**        | 5 Indian CA-specific alert rules (GST, TDS, ITR, Missing Docs, Document Expiry) — 8 rules total, AlertType enum extended to 11 values | ✅ Done    |
+| 14   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection            | ⏳ Pending |
 
 ---
 

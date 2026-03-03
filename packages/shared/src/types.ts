@@ -126,6 +126,8 @@ export interface ChatResponse {
     chunksRetrieved: number;
     chunksUsed: number;
     cached: boolean;
+    toolsUsed?: string[]; // Track which AI tools were used
+    multiStepThinking?: boolean; // Track if multi-step search was performed
   };
 }
 
@@ -230,7 +232,12 @@ export type AlertType =
   | "DEADLINE_DETECTED"
   | "HIGH_RISK_LANGUAGE"
   | "SYNC_FAILURE"
-  | "TOKEN_CAP_WARNING";
+  | "TOKEN_CAP_WARNING"
+  | "GST_FILING_DUE"
+  | "TDS_PAYMENT_DUE"
+  | "ITR_FILING_DUE"
+  | "MISSING_DOCUMENTS"
+  | "DOCUMENT_EXPIRY";
 
 export type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 

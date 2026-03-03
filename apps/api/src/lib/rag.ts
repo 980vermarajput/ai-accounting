@@ -92,6 +92,10 @@ export interface RagAnswer {
   costInr: number;
   /** Whether the answer was served from cache. */
   cached?: boolean;
+  /** AI tools that were used during generation */
+  toolsUsed?: string[];
+  /** Whether multi-step thinking/search was performed */
+  multiStepThinking?: boolean;
 }
 
 /**
@@ -343,6 +347,27 @@ export async function generateRagAnswer(
           required: ["emailOrDomain"]
         }
       }
+    },
+    {
+      type: "function" as const,
+      function: {
+        name: "search_documents_with_query",
+        description: "Perform an additional document search with a refined or alternative query to find more specific information. Use this when the initial search results are not sufficient to answer the user's question completely.",
+        parameters: {
+          type: "object",
+          properties: {
+            searchQuery: {
+              type: "string",
+              description: "The refined or alternative search query to find more relevant documents"
+            },
+            reasoning: {
+              type: "string",
+              description: "Brief explanation of why this additional search is needed"
+            }
+          },
+          required: ["searchQuery", "reasoning"]
+        }
+      }
     }
   ];
 
@@ -367,8 +392,15 @@ export async function generateRagAnswer(
   if (message?.tool_calls) {
     messages.push(message); // Add the assistant's message with tool calls
 
+    // Track which tools were used
+    const toolsUsed: string[] = [];
+    let multiStepThinking = false;
+
     // Process each tool call
     for (const toolCall of message.tool_calls) {
+      if (toolCall.type === "function") {
+        toolsUsed.push(toolCall.function.name);
+      }
       try {
         let toolResult: any = null;
 
@@ -380,6 +412,22 @@ export async function generateRagAnswer(
         } else if (toolCall.type === "function" && toolCall.function.name === "find_unassigned_documents") {
           const args = JSON.parse(toolCall.function.arguments);
           toolResult = await findUnassignedDocumentsForClient(firmId!, args.emailOrDomain);
+        } else if (toolCall.type === "function" && toolCall.function.name === "search_documents_with_query") {
+          const args = JSON.parse(toolCall.function.arguments);
+          multiStepThinking = true; // Mark that multi-step thinking occurred
+          // Perform additional document search with the refined query
+          const additionalResults = await searchChunks(args.searchQuery, firmId!);
+          toolResult = {
+            reasoning: args.reasoning,
+            searchQuery: args.searchQuery,
+            additionalDocuments: additionalResults.length,
+            results: additionalResults.map(result => ({
+              filename: result.filename,
+              excerpt: result.chunkText.substring(0, 200) + "...",
+              relevanceScore: result.score,
+              sourceDate: result.sourceDate
+            }))
+          };
         }
 
         // Add tool result to messages
@@ -415,7 +463,7 @@ export async function generateRagAnswer(
       total_tokens: (completion.usage?.total_tokens || 0) + (finalCompletion.usage?.total_tokens || 0)
     };
 
-    return parseCompletionResponse(finalRawContent, finalUsage);
+    return parseCompletionResponse(finalRawContent, finalUsage, toolsUsed, multiStepThinking);
   }
 
   // No tool calls, handle normal response
@@ -447,7 +495,9 @@ Response format: You MUST respond with valid JSON only, containing exactly these
 General guidelines:
 - Use professional language appropriate for CA practice in India.
 - Reference specific documents using [filename] notation where relevant.
-- Keep follow-up questions concise and directly actionable.`;
+- Keep follow-up questions concise and directly actionable.
+- If the initial search results don't provide sufficient information to fully answer a question, use the search_documents_with_query function to perform additional searches with refined queries.
+- Think step by step and be thorough in gathering all relevant information before providing your final answer.`;
 
   // Inject firm knowledge snapshot so the LLM knows what documents exist
   const snapshotBlock = firmSnapshot
@@ -462,8 +512,9 @@ General guidelines:
 
 Context guidelines:
 - Base your answer ONLY on the provided documents. Do not fabricate numbers, dates, or facts.
-- If the documents don't fully answer the question, acknowledge the gap clearly.
-- Cite the source document filename when you use information from it.`
+- If the documents don't fully answer the question, first try using search_documents_with_query to find additional relevant information before acknowledging any gaps.
+- Cite the source document filename when you use information from it.
+- Use multiple search queries with different keywords or approaches if needed to gather comprehensive information.`
     );
   }
 
@@ -485,7 +536,9 @@ No documents found: No relevant documents were found for this query.
  */
 function parseCompletionResponse(
   rawContent: string,
-  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number },
+  toolsUsed?: string[],
+  multiStepThinking?: boolean
 ) {
   // Parse JSON response; fall back gracefully on malformed output
   let parsed: LlmJsonResponse;
@@ -516,6 +569,8 @@ function parseCompletionResponse(
     tokensPrompt: usage.prompt_tokens,
     tokensCompletion: usage.completion_tokens,
     costInr: Math.round(costInr * 10_000) / 10_000, // 4 decimal places
+    toolsUsed: toolsUsed || [],
+    multiStepThinking: multiStepThinking || false,
   };
 }
 

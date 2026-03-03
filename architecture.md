@@ -1,9 +1,9 @@
 # Architecture Document — "AI Assistant for Accountants" (India MVP)
 
-> **Version:** 2.6 — Updated 2026-03-01
+> **Version:** 2.7 — Updated 2026-03-03
 > **Author:** @980vermarajput
-> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration**
-> **Related:** [PRD v2.6](./PRD.md)
+> **Status:** Production-Ready MVP — Security Hardened + Cost Protected + Smart Conversation Memory + Real-Time LLM Tools + Proactive AI Command Centre + Compliance Deadline Extraction + Team Invite System + **Telegram Bot Integration** + **5 New CA Alert Rules**
+> **Related:** [PRD v2.7](./PRD.md)
 
 ---
 
@@ -454,7 +454,7 @@ Our Prisma schema defines 14 core models with pgvector support and RLS:
 
 - **Multi-tenancy via firm_id partition key** on every table (ChatMessages inherit from ChatSession)
 - **pgvector integration** on Chunk.embedding (1536-dim, IVFFlat index for cosine similarity)
-- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback, MessageRole, AlertType, Severity, DeadlineConfidence
+- **Type-safe enums**: Plan, UserRole, DocumentSource, DocumentStatus, SyncType, SyncStatus, Feedback, MessageRole, AlertType (11 values), Severity, DeadlineConfidence
 - **Cascade deletes** for data cleanup (Document → Chunks + ExtractedDeadlines, ChatSession → ChatMessages)
 - **Timestamps** on every entity (createdAt, updatedAt)
 - **Automatic session expiry** via `expiresAt` column (2hr default, cleanup via admin endpoint)
@@ -713,12 +713,17 @@ For each linked user → sendMessage() with formatted alert
 User receives: 🚨 CRITICAL Alert or ⚠️ HIGH Alert
 ```
 
-**Alert Types Pushed:**
+**Alert Types Pushed (8 active detection rules):**
 
 - `INVOICE_OVERDUE` — HIGH severity (45+ days overdue)
 - `CLIENT_SILENT` — HIGH severity (60+ days no activity)
 - `HIGH_RISK_LANGUAGE` — HIGH severity (risky keywords detected)
 - `DEADLINE_DETECTED` — varies by extraction confidence
+- `GST_FILING_DUE` — HIGH/CRITICAL (GSTR-1 by 11th, GSTR-3B by 20th; CRITICAL ≤2 days)
+- `TDS_PAYMENT_DUE` — HIGH (TDS deposit by 7th of month; 30 Apr for March quarter)
+- `ITR_FILING_DUE` — HIGH (31 Jul non-audit / 31 Oct audit; mentions ₹5K S234F penalty)
+- `MISSING_DOCUMENTS` — MEDIUM (client has upcoming deadline but no docs synced in 21+ days)
+- `DOCUMENT_EXPIRY` — HIGH/MEDIUM (DSC, license, certificate, registration expiring ≤30 days)
 
 **Message Format:**
 

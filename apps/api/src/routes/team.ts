@@ -11,34 +11,8 @@ import { logger } from "../lib/logger";
 
 export const teamRouter: Router = Router();
 
-// All team routes require authentication
-teamRouter.use(requireAuth);
-
-// ─── GET /api/team/members — list all users in the firm ─────────
-teamRouter.get("/members", async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const members = await prisma.user.findMany({
-      where: { firmId: req.user!.firmId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        lastSyncAt: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "asc" },
-    });
-
-    const response: ApiResponse = { success: true, data: members };
-    res.json(response);
-  } catch (err) {
-    next(err);
-  }
-});
-
 // ─── Public: GET /api/team/invites/preview/:token — no auth needed ──────────
-// Must be defined BEFORE the requireAdmin block below to avoid the admin guard
+// Must be defined BEFORE the requireAuth middleware to avoid authentication
 teamRouter.get(
   "/invites/preview/:token",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -89,6 +63,32 @@ teamRouter.get(
     }
   },
 );
+
+// All team routes require authentication
+teamRouter.use(requireAuth);
+
+// ─── GET /api/team/members — list all users in the firm ─────────
+teamRouter.get("/members", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const members = await prisma.user.findMany({
+      where: { firmId: req.user!.firmId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        lastSyncAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const response: ApiResponse = { success: true, data: members };
+    res.json(response);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // All routes below require admin role
 teamRouter.use(requireAdmin);

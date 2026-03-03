@@ -210,7 +210,7 @@ chatRouter.post(
         clientId: body.clientId,
         tokensUsed: ragAnswer.tokensPrompt + ragAnswer.tokensCompletion,
         searchResults: searchResults.length,
-        toolsUsed: [] // TODO: Add tool tracking from generateRagAnswer
+        toolsUsed: ragAnswer.toolsUsed || []
       });
 
       // 10. Build response
@@ -231,6 +231,8 @@ chatRouter.post(
           chunksRetrieved: searchResults.length,
           chunksUsed: searchResults.length,
           cached: false,
+          toolsUsed: ragAnswer.toolsUsed,
+          multiStepThinking: ragAnswer.multiStepThinking,
         },
       };
 
@@ -253,6 +255,8 @@ chatRouter.post(
               chunksRetrieved: responseData.metadata.chunksRetrieved,
               chunksUsed: responseData.metadata.chunksUsed,
               cached: false,
+              toolsUsed: responseData.metadata.toolsUsed,
+              multiStepThinking: responseData.metadata.multiStepThinking,
             },
           }),
           "EX",

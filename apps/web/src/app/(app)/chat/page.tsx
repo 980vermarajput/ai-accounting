@@ -60,6 +60,8 @@ type AssistantMsg = {
   cached: boolean;
   chunksRetrieved: number;
   chunksUsed: number;
+  toolsUsed?: string[];
+  multiStepThinking?: boolean;
 };
 
 type ErrorMsg = {
@@ -186,6 +188,11 @@ function MessageBubble({
               <Zap className="h-3 w-3" /> Cached
             </Badge>
           )}
+          {message.multiStepThinking && (
+            <Badge variant="success">
+              <RefreshCw className="h-3 w-3" /> Multi-step
+            </Badge>
+          )}
           {message.chunksRetrieved > 0 && (
             <span className="text-[11px] text-muted-foreground">
               <FileText className="inline h-3 w-3 mr-0.5" />
@@ -199,30 +206,6 @@ function MessageBubble({
           {message.content}
         </div>
 
-        {/* No-results guidance */}
-        {!hasSources && message.confidence.level === "low" && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm space-y-2">
-            <p className="font-medium text-amber-800">No supporting documents found</p>
-            <p className="text-amber-700 text-xs leading-relaxed">
-              The answer is based on general knowledge, not your firm's data. Try syncing
-              more documents or rephrasing your question.
-            </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <a
-                href="/sync"
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
-              >
-                <RefreshCw className="h-3 w-3" /> Sync Gmail / Drive
-              </a>
-              <a
-                href="/documents"
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 transition-colors"
-              >
-                <Upload className="h-3 w-3" /> Upload documents
-              </a>
-            </div>
-          </div>
-        )}
 
         {/* Action buttons row */}
         <div className="flex items-center gap-2">
@@ -329,6 +312,60 @@ export default function ChatPage() {
   } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
+  // Persist session ID to localStorage
+  useEffect(() => {
+    // Load session ID from localStorage on mount
+    const savedSessionId = localStorage.getItem('chat-session-id');
+    if (savedSessionId) {
+      setSessionId(savedSessionId);
+    }
+  }, []);
+
+  // Save session ID to localStorage when it changes
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem('chat-session-id', sessionId);
+    }
+  }, [sessionId]);
+
+  // Load conversation history when session ID is restored
+  useEffect(() => {
+    const loadSessionMessages = () => {
+      if (sessionId) {
+        // Load messages from localStorage for this session
+        const savedMessages = localStorage.getItem(`chat-messages-${sessionId}`);
+        if (savedMessages) {
+          try {
+            const parsedMessages = JSON.parse(savedMessages);
+            // Ensure all messages have the required properties to avoid undefined errors
+            const validatedMessages = parsedMessages.map((msg: any) => ({
+              ...msg,
+              // Add default values for any missing properties
+              toolsUsed: msg.toolsUsed || [],
+              multiStepThinking: msg.multiStepThinking || false,
+              cached: msg.cached || false,
+              chunksRetrieved: msg.chunksRetrieved || 0,
+              chunksUsed: msg.chunksUsed || 0,
+            }));
+            setMessages(validatedMessages);
+          } catch {
+            // Invalid JSON, clear this session's cache
+            localStorage.removeItem(`chat-messages-${sessionId}`);
+          }
+        }
+      }
+    };
+
+    loadSessionMessages();
+  }, [sessionId]);
+
+  // Save messages to localStorage when they change
+  useEffect(() => {
+    if (sessionId && messages.length > 0) {
+      localStorage.setItem(`chat-messages-${sessionId}`, JSON.stringify(messages));
+    }
+  }, [sessionId, messages]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -416,14 +453,16 @@ export default function ChatPage() {
             id: uid(),
             role: "assistant",
             content: data.answer,
-            sources: data.sources,
-            followups: data.suggestedFollowups,
+            sources: data.sources || [],
+            followups: data.suggestedFollowups || [],
             queryId: data.queryId,
-            latencyMs: data.metadata.latencyMs,
-            confidence: data.confidence,
-            cached: data.metadata.cached,
-            chunksRetrieved: data.metadata.chunksRetrieved,
-            chunksUsed: data.metadata.chunksUsed,
+            latencyMs: data.metadata?.latencyMs || 0,
+            confidence: data.confidence || { level: "medium", score: 0.5 },
+            cached: data.metadata?.cached || false,
+            chunksRetrieved: data.metadata?.chunksRetrieved || 0,
+            chunksUsed: data.metadata?.chunksUsed || 0,
+            toolsUsed: data.metadata?.toolsUsed || [],
+            multiStepThinking: data.metadata?.multiStepThinking || false,
           },
         ]);
 
@@ -517,6 +556,17 @@ export default function ChatPage() {
             onClick={() => {
               setMessages([]);
               setSessionId(null);
+              // Clear ALL localStorage for chat functionality
+              localStorage.removeItem('chat-session-id');
+              // Clear any cached messages
+              const keys = Object.keys(localStorage);
+              keys.forEach(key => {
+                if (key.startsWith('chat-messages-')) {
+                  localStorage.removeItem(key);
+                }
+              });
+              // Force a page reload to clear any cached state
+              window.location.reload();
             }}
             className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors"
           >

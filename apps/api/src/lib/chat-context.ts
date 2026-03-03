@@ -154,7 +154,7 @@ export async function saveMessages(
         role: 'assistant',
         content: assistantResponse,
         clientId: metadata.clientId,
-        tokensUsed: metadata.tokensUsed,
+        tokensUsed: metadata.tokensUsed || 0,
         searchResults: metadata.searchResults,
         toolsUsed: metadata.toolsUsed || []
       }
@@ -269,7 +269,8 @@ function smartTrimMessages(messages: ChatMessage[], maxTokens: number): TrimResu
 
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
-    const messageTokens = message.tokensUsed || estimateTokens(message.content);
+    if (!message) continue; // Skip if message is undefined
+    const messageTokens = message.tokensUsed || estimateTokens(message.content || '');
 
     // Check if adding this message would exceed the limit
     if (totalTokens + messageTokens > maxTokens) {
@@ -277,10 +278,12 @@ function smartTrimMessages(messages: ChatMessage[], maxTokens: number): TrimResu
       if (result.length < minToKeep) {
         // Find the least important message to remove
         const oldestIndex = findLeastImportantMessage(result);
-        if (oldestIndex !== -1) {
+        if (oldestIndex !== -1 && result[oldestIndex]) {
           const removed = result.splice(oldestIndex, 1)[0];
-          totalTokens -= (removed.tokensUsed || estimateTokens(removed.content));
-          trimmedCount++;
+          if (removed) {
+            totalTokens -= (removed.tokensUsed || estimateTokens(removed.content || ''));
+            trimmedCount++;
+          }
         }
       } else {
         trimmedCount++;
@@ -310,11 +313,12 @@ function smartTrimMessages(messages: ChatMessage[], maxTokens: number): TrimResu
 function findLeastImportantMessage(messages: ChatMessage[]): number {
   // Prefer to remove system messages first
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'system') return i;
+    const message = messages[i];
+    if (message && message.role === 'system') return i;
   }
 
-  // Then remove the oldest message
-  return 0;
+  // Then remove the oldest message (make sure it exists)
+  return messages.length > 0 ? 0 : -1;
 }
 
 // ─── Utility Functions ─────────────────────────────────

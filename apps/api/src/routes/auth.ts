@@ -158,14 +158,81 @@ authRouter.get(
           if (!user) throw new Error("Failed to create user after firm creation");
         }
       } else {
-        // Returning user — update their refresh token
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
-            lastSyncAt: null,
-          },
-        });
+        // Returning user
+
+        // Check if they're accepting an invite to join a different firm
+        if (inviteToken) {
+          const invite = await prisma.firmInvite.findUnique({
+            where: { token: inviteToken },
+            include: { firm: true },
+          });
+
+          if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
+            return res.redirect(`${frontendUrl}/auth/error?reason=invite_invalid`);
+          }
+          if (invite.email && invite.email !== profile.email) {
+            return res.redirect(`${frontendUrl}/auth/error?reason=invite_email_mismatch`);
+          }
+
+          // If user already belongs to this firm, just update tokens and mark invite as used
+          if (user.firmId === invite.firmId) {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+                lastSyncAt: null,
+                // Don't change role - they're already in this firm
+              },
+            });
+
+            // Mark invite as consumed
+            await prisma.firmInvite.update({
+              where: { id: invite.id },
+              data: { usedBy: user.id, usedAt: new Date() },
+            });
+          } else {
+            // User belongs to a different firm - create new user in invited firm
+            const newUser = await prisma.user.create({
+              data: {
+                firmId: invite.firmId,
+                email: profile.email,
+                name: profile.name,
+                role: invite.role,
+                googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+              },
+            });
+
+            // Mark invite as consumed
+            await prisma.firmInvite.update({
+              where: { id: invite.id },
+              data: { usedBy: newUser.id, usedAt: new Date() },
+            });
+
+            // Update user reference to the new user
+            user = await prisma.user.findUnique({
+              where: { id: newUser.id },
+              include: { firm: true },
+            });
+
+            if (!user) throw new Error("Failed to fetch user after invite acceptance");
+
+            logger.authEvent({
+              userId: newUser.id,
+              firmId: invite.firmId,
+              event: "invite_accepted",
+              ipAddress: req.ip,
+            });
+          }
+        } else {
+          // Normal returning user — just update their refresh token
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              googleRefreshTokenEnc: Buffer.from(encryptedRefreshToken),
+              lastSyncAt: null,
+            },
+          });
+        }
       }
 
       // 5. Issue JWT
