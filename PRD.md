@@ -49,19 +49,19 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### ✅ In Scope
 
-| Feature              | Description                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| **Google OAuth**     | Gmail + Drive read-only access via OAuth 2.0 with PKCE                                |
-| **Text Extraction**  | PDF (OCR fallback), DOCX, XLSX/CSV, plain text, `.eml`                                |
-| **RAG Chat**         | Ask questions → get grounded answers with source citations                            |
-| **Draft Email**      | Compose replies in professional CA tone with action items                             |
-| **Admin Dashboard**  | Sync status, user management, data freshness indicators                               |
-| **Command Centre**   | Proactive daily briefings, alert detection, dashboard UI                              |
-| **Multi-tenancy**    | Firm-level data isolation with row-level security                                     |
-| **Audit Logging**    | Every query, every chunk sent to LLM, every user action                               |
-| **Billing (simple)** | Stripe Checkout for per-seat monthly billing                                          |
-| **Team Invite**      | Admin-generated invite links so associates can join a firm without creating a new one |
-| **Telegram Bot**     | Query firm data via Telegram — /ask for RAG, /clients list, /summary, /alerts toggle  |
+| Feature              | Description                                                                                                           |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Google OAuth**     | Gmail + Drive read-only access via OAuth 2.0 with PKCE                                                                |
+| **Text Extraction**  | PDF (OCR fallback), DOCX, XLSX/CSV, plain text, `.eml`                                                                |
+| **RAG Chat**         | Ask questions → get grounded answers with source citations                                                            |
+| **Draft Email**      | Compose replies in professional CA tone with action items                                                             |
+| **Admin Dashboard**  | Sync status, user management, data freshness indicators                                                               |
+| **Command Centre**   | Proactive daily briefings, alert detection, dashboard UI                                                              |
+| **Multi-tenancy**    | Firm-level data isolation with row-level security                                                                     |
+| **Audit Logging**    | Every query, every chunk sent to LLM, every user action                                                               |
+| **Billing (simple)** | Stripe Checkout for per-seat monthly billing                                                                          |
+| **Team Invite**      | Admin-generated invite links so associates can join a firm without creating a new one                                 |
+| **Telegram Bot**     | Query firm data via Telegram — /ask for RAG, /clients list, /summary, /alerts toggle                                  |
 | **CA Alert Rules**   | 5 Indian CA-specific alert rules: GST filing due, TDS payment due, ITR filing due, missing documents, document expiry |
 
 ### ❌ Out of Scope (Future Phases)
@@ -246,20 +246,20 @@ A lightweight, secure AI assistant for Indian chartered accountants that indexes
 
 ### `alerts` (Added Sprint 1 — 1 Mar 2026)
 
-| Column      | Type                                                                                                                                     | Notes             |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| id          | CUID PK                                                                                                                                  |                   |
-| firm_id     | FK → firms.id                                                                                                                            | RLS partition key |
-| client_id   | FK → clients.id                                                                                                                          | Nullable          |
-| type        | ENUM('INVOICE_OVERDUE','CLIENT_SILENT','HIGH_RISK_LANGUAGE','DEADLINE_DETECTED','SYNC_FAILURE','TOKEN_CAP_WARNING','GST_FILING_DUE','TDS_PAYMENT_DUE','ITR_FILING_DUE','MISSING_DOCUMENTS','DOCUMENT_EXPIRY') | 11 values |
-| severity    | ENUM('CRITICAL','HIGH','MEDIUM','LOW')                                                                                                   |                   |
-| title       | VARCHAR(255)                                                                                                                             |                   |
-| body        | TEXT                                                                                                                                     | Nullable          |
-| metadata    | JSONB                                                                                                                                    | Flexible fields   |
-| is_read     | BOOLEAN                                                                                                                                  | Default false     |
-| resolved_at | TIMESTAMPTZ                                                                                                                              | Nullable          |
-| expires_at  | TIMESTAMPTZ                                                                                                                              | Nullable          |
-| created_at  | TIMESTAMPTZ                                                                                                                              |                   |
+| Column      | Type                                                                                                                                                                                                          | Notes             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| id          | CUID PK                                                                                                                                                                                                       |                   |
+| firm_id     | FK → firms.id                                                                                                                                                                                                 | RLS partition key |
+| client_id   | FK → clients.id                                                                                                                                                                                               | Nullable          |
+| type        | ENUM('INVOICE_OVERDUE','CLIENT_SILENT','HIGH_RISK_LANGUAGE','DEADLINE_DETECTED','SYNC_FAILURE','TOKEN_CAP_WARNING','GST_FILING_DUE','TDS_PAYMENT_DUE','ITR_FILING_DUE','MISSING_DOCUMENTS','DOCUMENT_EXPIRY') | 11 values         |
+| severity    | ENUM('CRITICAL','HIGH','MEDIUM','LOW')                                                                                                                                                                        |                   |
+| title       | VARCHAR(255)                                                                                                                                                                                                  |                   |
+| body        | TEXT                                                                                                                                                                                                          | Nullable          |
+| metadata    | JSONB                                                                                                                                                                                                         | Flexible fields   |
+| is_read     | BOOLEAN                                                                                                                                                                                                       | Default false     |
+| resolved_at | TIMESTAMPTZ                                                                                                                                                                                                   | Nullable          |
+| expires_at  | TIMESTAMPTZ                                                                                                                                                                                                   | Nullable          |
+| created_at  | TIMESTAMPTZ                                                                                                                                                                                                   |                   |
 
 **Indexes:** `[firmId]`, `[firmId, type, isRead]`, `[firmId, severity]`
 
@@ -751,20 +751,20 @@ Click "Draft Reply" → Modal opens with:
 
 ## 14 — Dev Milestones (90-Day Plan)
 
-| Week | Sprint                    | Deliverables                                                                                  | Status     |
-| ---- | ------------------------- | --------------------------------------------------------------------------------------------- | ---------- |
-| 0    | **Setup**                 | Repo structure, CI/CD pipeline, AWS infra (Terraform), DB schema migration, Google OAuth app  | ✅ Done    |
-| 1–2  | **Auth & Foundation**     | Google OAuth flow, JWT sessions, user/firm CRUD, RLS setup, basic Next.js shell               | ✅ Done    |
-| 3–4  | **Ingestion Pipeline**    | Gmail sync worker, Drive sync worker, S3 storage, document status tracking                    | ✅ Done    |
-| 5–6  | **Text Processing**       | PDF/DOCX/XLSX extraction, text normalization, chunking pipeline, embedding batch jobs         | ✅ Done    |
-| 7–8  | **RAG Engine**            | Vector search with pgvector, prompt assembly, LLM integration, chat API, source citations     | ✅ Done    |
-| 9–10 | **Chat UI & Email Draft** | Chat interface, conversation history, draft email modal, client sidebar                       | ✅ Done    |
-| 11   | **Admin & Polish**        | Admin dashboard, audit logs, usage stats, sync status UI, error handling                      | ✅ Done    |
-| 11+  | **Command Centre**        | Proactive AI Command Centre: alert detection, daily briefings, dashboard UI, BullMQ scheduler | ✅ Done    |
-| 12   | **Deadline Extraction**   | Compliance deadline extraction pipeline, calendar UI, ICS export, alert integration           | ✅ Done    |
-| 12+  | **Team Invite System**    | Admin invite links, OAuth state-based invite flow, team management UI, role management        | ✅ Done    |
+| Week | Sprint                    | Deliverables                                                                                                                          | Status     |
+| ---- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 0    | **Setup**                 | Repo structure, CI/CD pipeline, AWS infra (Terraform), DB schema migration, Google OAuth app                                          | ✅ Done    |
+| 1–2  | **Auth & Foundation**     | Google OAuth flow, JWT sessions, user/firm CRUD, RLS setup, basic Next.js shell                                                       | ✅ Done    |
+| 3–4  | **Ingestion Pipeline**    | Gmail sync worker, Drive sync worker, S3 storage, document status tracking                                                            | ✅ Done    |
+| 5–6  | **Text Processing**       | PDF/DOCX/XLSX extraction, text normalization, chunking pipeline, embedding batch jobs                                                 | ✅ Done    |
+| 7–8  | **RAG Engine**            | Vector search with pgvector, prompt assembly, LLM integration, chat API, source citations                                             | ✅ Done    |
+| 9–10 | **Chat UI & Email Draft** | Chat interface, conversation history, draft email modal, client sidebar                                                               | ✅ Done    |
+| 11   | **Admin & Polish**        | Admin dashboard, audit logs, usage stats, sync status UI, error handling                                                              | ✅ Done    |
+| 11+  | **Command Centre**        | Proactive AI Command Centre: alert detection, daily briefings, dashboard UI, BullMQ scheduler                                         | ✅ Done    |
+| 12   | **Deadline Extraction**   | Compliance deadline extraction pipeline, calendar UI, ICS export, alert integration                                                   | ✅ Done    |
+| 12+  | **Team Invite System**    | Admin invite links, OAuth state-based invite flow, team management UI, role management                                                | ✅ Done    |
 | 13   | **CA Alert Rules**        | 5 Indian CA-specific alert rules (GST, TDS, ITR, Missing Docs, Document Expiry) — 8 rules total, AlertType enum extended to 11 values | ✅ Done    |
-| 14   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection            | ⏳ Pending |
+| 14   | **Pilot Launch**          | Security hardening, load testing, pilot onboarding (10 firms), feedback collection                                                    | ⏳ Pending |
 
 ---
 

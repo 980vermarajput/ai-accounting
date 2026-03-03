@@ -464,19 +464,19 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ### New Features Added (27 Feb - 2 Mar 2026)
 
-| Feature                         | Implementation Date | Description                                                                                        |
-| ------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
-| Keyword-based sync filtering    | 27 Feb 2026         | Gmail/Drive sync with optional keyword filtering (AND/OR logic), max 10 keywords per sync          |
-| Smart conversation memory       | 1 Mar 2026          | Session-based chat with 3000-token context limit, 2-hour auto-expiry, intelligent trimming         |
-| Real-time LLM tools             | 1 Mar 2026          | AI can query firm analytics, client details, unassigned docs via OpenAI function calling           |
-| Client management UI            | 1 Mar 2026          | Full CRUD + detail views, document analytics, thread viewer, bulk assignment capabilities          |
-| Admin session cleanup           | 1 Mar 2026          | Auto-cleanup of expired sessions, firm snapshot generation endpoint                                |
-| Email-based document assignment | 1 Mar 2026          | Auto-assigns Gmail documents to clients by matching email domain                                   |
-| Proactive AI Command Centre     | 1 Mar 2026          | Daily briefings, alert detection (3 rules), dashboard API + frontend, BullMQ scheduler             |
-| Compliance Deadline Extraction  | 2 Mar 2026          | Regex + GPT-4o-mini hybrid pipeline; 25 compliance keywords; auto-creates DEADLINE_DETECTED alerts |
-| Deadline Calendar + List UI     | 2 Mar 2026          | Calendar/list toggle, client filter, colour coding (red/orange/green), ICS export, side panel      |
-| Team Invite System              | 2 Mar 2026          | Admin invite-link flow, 7-day expiry tokens, role-based access, public join page, team management  |
-| Telegram Bot Integration        | 3 Mar 2026          | Webhook, 8 commands, account linking via 6-char codes, Telegram nav link, /help HTML entity fix    |
+| Feature                         | Implementation Date | Description                                                                                                                           |
+| ------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Keyword-based sync filtering    | 27 Feb 2026         | Gmail/Drive sync with optional keyword filtering (AND/OR logic), max 10 keywords per sync                                             |
+| Smart conversation memory       | 1 Mar 2026          | Session-based chat with 3000-token context limit, 2-hour auto-expiry, intelligent trimming                                            |
+| Real-time LLM tools             | 1 Mar 2026          | AI can query firm analytics, client details, unassigned docs via OpenAI function calling                                              |
+| Client management UI            | 1 Mar 2026          | Full CRUD + detail views, document analytics, thread viewer, bulk assignment capabilities                                             |
+| Admin session cleanup           | 1 Mar 2026          | Auto-cleanup of expired sessions, firm snapshot generation endpoint                                                                   |
+| Email-based document assignment | 1 Mar 2026          | Auto-assigns Gmail documents to clients by matching email domain                                                                      |
+| Proactive AI Command Centre     | 1 Mar 2026          | Daily briefings, alert detection (3 rules), dashboard API + frontend, BullMQ scheduler                                                |
+| Compliance Deadline Extraction  | 2 Mar 2026          | Regex + GPT-4o-mini hybrid pipeline; 25 compliance keywords; auto-creates DEADLINE_DETECTED alerts                                    |
+| Deadline Calendar + List UI     | 2 Mar 2026          | Calendar/list toggle, client filter, colour coding (red/orange/green), ICS export, side panel                                         |
+| Team Invite System              | 2 Mar 2026          | Admin invite-link flow, 7-day expiry tokens, role-based access, public join page, team management                                     |
+| Telegram Bot Integration        | 3 Mar 2026          | Webhook, 8 commands, account linking via 6-char codes, Telegram nav link, /help HTML entity fix                                       |
 | 5 New CA Alert Rules            | 3 Mar 2026          | GST_FILING_DUE, TDS_PAYMENT_DUE, ITR_FILING_DUE, MISSING_DOCUMENTS, DOCUMENT_EXPIRY — 8 rules total, AlertType enum now has 11 values |
 
 ### Runtime Bugs Fixed (Previous Sessions)
@@ -517,19 +517,19 @@ The monorepo has **full database schema**, **API routes**, and **Web UI** comple
 
 ## Key Metrics
 
-| Metric                             | Value                                                                                               |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Packages**                       | 3 (api, web, shared)                                                                                |
-| **TypeScript Files**               | ~80 (routes, middleware, utilities, workers, tools, context, alerts, briefings, deadline extractor) |
-| **Database Tables**                | 15 with RLS enabled (+ telegram_links + firm_invites)                                               |
+| Metric                             | Value                                                                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Packages**                       | 3 (api, web, shared)                                                                                              |
+| **TypeScript Files**               | ~80 (routes, middleware, utilities, workers, tools, context, alerts, briefings, deadline extractor)               |
+| **Database Tables**                | 15 with RLS enabled (+ telegram_links + firm_invites)                                                             |
 | **REST Endpoints**                 | 42 (health + auth + documents + chat + sync + drafts + clients + admin + dashboard + deadlines + team + telegram) |
-| **Zod Schemas**                    | 28+ validation schemas (including telegram + team schemas)                                          |
-| **Test Count**                     | 304 (224 API + 80 shared)                                                                           |
-| **Total LOC** (excl. node_modules) | ~6200                                                                                               |
-| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                                                                           |
-| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                                                                      |
-| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)                                                            |
-| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379                                                   |
+| **Zod Schemas**                    | 28+ validation schemas (including telegram + team schemas)                                                        |
+| **Test Count**                     | 304 (224 API + 80 shared)                                                                                         |
+| **Total LOC** (excl. node_modules) | ~6200                                                                                                             |
+| **Build Time** (from cold)         | ~8 seconds (Turbo cached)                                                                                         |
+| **Dev Time (hot reload)**          | Express ~200ms, Next.js ~500ms                                                                                    |
+| **Container Images**               | 2 (api, web) + 2 infra (postgres, redis)                                                                          |
+| **Port Usage**                     | API :4000, Web :3000, Postgres :5432, Redis :6379                                                                 |
 
 ---
 

@@ -646,7 +646,7 @@ async function detectTdsPaymentDue(firmId: string): Promise<AlertDetectionResult
 // Belated return:   31 December
 
 const ITR_DEADLINES = [
-  { label: "ITR (non-audit)", month: 6, day: 31 },  // 31 July (month 6 = July)
+  { label: "ITR (non-audit)", month: 6, day: 31 }, // 31 July (month 6 = July)
   { label: "ITR (audit cases)", month: 9, day: 31 }, // 31 October (month 9 = October)
 ];
 
