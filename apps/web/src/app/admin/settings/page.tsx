@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { apiFetch } from "../../../lib/api";
 import {
   Settings,
   Shield,
@@ -74,23 +75,38 @@ export default function AdminSettings() {
   });
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await apiFetch<{ success: boolean; data: PlatformSettings }>("/api/platform-admin/settings");
+        if (res.success) {
+          setSettings(res.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch settings:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchSettings();
+  }, []);
 
   const handleSave = async () => {
     setSaveStatus('saving');
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // In a real implementation, you'd make an API call here:
-      // await apiFetch('/api/platform-admin/settings', {
-      //   method: 'PUT',
-      //   body: JSON.stringify(settings)
-      // });
+      await apiFetch('/api/platform-admin/settings', {
+        method: 'PUT',
+        body: JSON.stringify(settings)
+      });
 
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (error) {
+      console.error("Failed to save settings:", error);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
@@ -105,6 +121,14 @@ export default function AdminSettings() {
       }
     }));
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -419,16 +443,6 @@ export default function AdminSettings() {
         </div>
       </div>
 
-      {/* Implementation Note */}
-      <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-        <div className="flex items-center gap-2 text-purple-800">
-          <Settings className="w-5 h-5" />
-          <span className="font-medium">Development Note</span>
-        </div>
-        <p className="text-purple-700 text-sm mt-1">
-          This settings page shows a comprehensive platform configuration interface. To implement fully, you'll need to create backend APIs for saving/loading settings and integrate with your infrastructure for applying these configurations.
-        </p>
-      </div>
     </div>
   );
 }

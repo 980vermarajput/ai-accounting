@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "../../../lib/api";
 import {
   Building,
@@ -26,6 +27,7 @@ interface Firm {
 }
 
 export default function AdminFirms() {
+  const router = useRouter();
   const [firms, setFirms] = useState<Firm[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -95,7 +97,11 @@ export default function AdminFirms() {
       {/* Firms Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredFirms.map((firm) => (
-          <div key={firm.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-shadow">
+          <div
+            key={firm.id}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => router.push(`/admin/firms/${firm.id}`)}
+          >
             {/* Firm Header */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -107,15 +113,16 @@ export default function AdminFirms() {
                   <p className="text-sm text-gray-600">/{firm.slug}</p>
                 </div>
               </div>
-              <a
-                href={`/firm/${firm.slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/admin/firms/${firm.id}`);
+                }}
                 className="p-1.5 text-gray-400 hover:text-purple-600 transition-colors"
-                title="Visit firm"
+                title="View firm details"
               >
                 <ExternalLink className="w-4 h-4" />
-              </a>
+              </button>
             </div>
 
             {/* Plan Badge */}

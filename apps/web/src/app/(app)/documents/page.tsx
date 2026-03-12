@@ -24,10 +24,113 @@ import {
   X,
   FileText,
   Inbox,
+  Upload,
+  Plus,
 } from "lucide-react";
 import type { PaginatedResponse, ApiResponse } from "@ai-accounting/shared";
 
 // ─── Local types ─────────────────────────────────────────────────
+
+interface FileUploadZoneProps {
+  onFilesSelected: (files: FileList) => void;
+  uploading: boolean;
+  onCancel: () => void;
+}
+
+const FileUploadZone: React.FC<FileUploadZoneProps> = ({ onFilesSelected, uploading, onCancel }) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      onFilesSelected(files);
+    }
+  }, [onFilesSelected]);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      onFilesSelected(files);
+    }
+  }, [onFilesSelected]);
+
+  return (
+    <div className="space-y-4">
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        className={cn(
+          "border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200",
+          isDragOver
+            ? "border-blue-400 bg-blue-50"
+            : "border-gray-300 hover:border-gray-400"
+        )}
+      >
+        <Upload className="h-8 w-8 mx-auto text-gray-400 mb-4" />
+        <p className="text-sm font-medium text-gray-900 mb-1">
+          Drop files here or click to browse
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Supports PDF, DOCX, XLSX, CSV, TXT (max 25MB each)
+        </p>
+        <input
+          type="file"
+          multiple
+          accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt"
+          onChange={handleFileInput}
+          className="hidden"
+          id="file-input"
+          disabled={uploading}
+        />
+        <label
+          htmlFor="file-input"
+          className={cn(
+            "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer",
+            uploading
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          )}
+        >
+          {uploading ? (
+            <>
+              <Spinner className="h-4 w-4" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              Select Files
+            </>
+          )}
+        </label>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onCancel}
+          disabled={uploading}
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 interface DocumentRow {
   id: string;
@@ -81,6 +184,12 @@ export default function DocumentsPage() {
   const [syncingDrive, setSyncingDrive] = useState(false);
   const [activeJobs, setActiveJobs] = useState<SyncStatus["activeJobs"]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<{
+    text: string;
+    type: "success" | "error";
+  } | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   const PAGE_SIZE = 20;
 
@@ -153,6 +262,59 @@ export default function DocumentsPage() {
     }
   }, []);
 
+  const handleFileUpload = useCallback(async (files: FileList) => {
+    setUploading(true);
+    setUploadMessage(null);
+
+    const successfulUploads: string[] = [];
+    const failedUploads: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || 'Upload failed');
+        }
+
+        const result = await response.json();
+        successfulUploads.push(file.name);
+      } catch (err) {
+        console.error(`Failed to upload ${file.name}:`, err);
+        failedUploads.push(`${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
+    // Show results and refresh document list
+    if (successfulUploads.length > 0) {
+      setUploadMessage({
+        text: `Successfully uploaded ${successfulUploads.length} file(s). Documents will be processed and indexed for search.`,
+        type: "success",
+      });
+      void loadDocuments(); // Refresh the document list
+    }
+
+    if (failedUploads.length > 0) {
+      setUploadMessage({
+        text: `Failed uploads: ${failedUploads.join(', ')}`,
+        type: "error",
+      });
+    }
+
+    setUploading(false);
+    setShowUploadModal(false);
+    setTimeout(() => setUploadMessage(null), 8000);
+  }, [loadDocuments]);
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const runningJobs = activeJobs.filter(
     (j) => j.status === "running" || j.status === "queued",
@@ -182,6 +344,17 @@ export default function DocumentsPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={uploading}
+                onClick={() => setShowUploadModal(true)}
+                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <Upload className="h-4 w-4" />
+                Upload Files
+              </Button>
+              <div className="h-6 w-px bg-slate-300"></div>
               <Button
                 variant="secondary"
                 size="sm"
@@ -230,6 +403,16 @@ export default function DocumentsPage() {
             variant={syncMessage.type === "success" ? "success" : "error"}
             message={syncMessage.text}
             onDismiss={() => setSyncMessage(null)}
+          />
+        </div>
+      )}
+
+      {uploadMessage && (
+        <div className="px-8 pt-4">
+          <FlashMessage
+            variant={uploadMessage.type === "success" ? "success" : "error"}
+            message={uploadMessage.text}
+            onDismiss={() => setUploadMessage(null)}
           />
         </div>
       )}
@@ -406,6 +589,30 @@ export default function DocumentsPage() {
           </div>
         </div>
       )}
+
+      {/* ── File Upload Modal ──────────────────────────────── */}
+      <Modal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        maxWidth="max-w-md"
+      >
+        <ModalHeader>
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Upload Documents
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Upload PDF, Word, Excel, CSV, or text files for processing and search indexing.
+          </p>
+        </ModalHeader>
+        <ModalBody>
+          <FileUploadZone
+            onFilesSelected={handleFileUpload}
+            uploading={uploading}
+            onCancel={() => setShowUploadModal(false)}
+          />
+        </ModalBody>
+      </Modal>
 
       {/* ── Thread Viewer Modal ────────────────────────────── */}
       <Modal

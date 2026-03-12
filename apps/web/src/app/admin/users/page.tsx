@@ -42,7 +42,7 @@ interface Firm {
 
 export default function AdminUsers() {
   const [firms, setFirms] = useState<Firm[]>([]);
-  const [selectedFirm, setSelectedFirm] = useState<string>("");
+  const [selectedFirm, setSelectedFirm] = useState<string>("__ALL__");
   const [users, setUsers] = useState<UserWithFirm[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -68,24 +68,69 @@ export default function AdminUsers() {
 
       setLoading(true);
       try {
-        // For now, we'll simulate user data since we don't have a users endpoint yet
-        // In a real implementation, you'd call something like:
-        // const res = await apiFetch<{ success: boolean; data: UserWithFirm[] }>(`/api/platform-admin/firms/${selectedFirm}/users`);
+        if (selectedFirm === "__ALL__") {
+          // Fetch all users across all firms
+          const res = await apiFetch<{
+            success: boolean;
+            data: {
+              users: {
+                id: string;
+                email: string;
+                name: string;
+                role: "admin" | "member";
+                isAdmin: boolean;
+                lastSyncAt: string | null;
+                createdAt: string;
+                firm: {
+                  id: string;
+                  name: string;
+                  slug: string;
+                  plan: string;
+                }
+              }[]
+              pagination: { page: number; limit: number; total: number };
+            }
+          }>(`/api/platform-admin/users?search=${encodeURIComponent(searchTerm)}`);
 
-        // Simulated data for demonstration
-        const simulatedUsers: UserWithFirm[] = [
-          {
-            id: "1",
-            email: "admin@example.com",
-            name: "Admin User",
-            role: "admin",
-            isAdmin: false,
-            createdAt: new Date().toISOString(),
-            lastSyncAt: new Date().toISOString(),
-            firm: firms.find(f => f.id === selectedFirm) || { id: selectedFirm, name: "Unknown", slug: "unknown", plan: "basic" }
+          if (res.success) {
+            setUsers(res.data.users);
+          } else {
+            setUsers([]);
           }
-        ];
-        setUsers(simulatedUsers);
+        } else {
+          // Fetch users for specific firm
+          const res = await apiFetch<{
+            success: boolean;
+            data: {
+              firm: { id: string; name: string };
+              users: {
+                id: string;
+                email: string;
+                name: string;
+                role: "admin" | "member";
+                isAdmin: boolean;
+                lastSyncAt: string | null;
+                createdAt: string;
+              }[]
+            }
+          }>(`/api/platform-admin/firms/${selectedFirm}/users`);
+
+          if (res.success) {
+            const selectedFirmData = firms.find(f => f.id === selectedFirm);
+            const usersWithFirm: UserWithFirm[] = res.data.users.map(user => ({
+              ...user,
+              firm: {
+                id: selectedFirmData?.id || selectedFirm,
+                name: selectedFirmData?.name || res.data.firm.name,
+                slug: selectedFirmData?.slug || "",
+                plan: "trial" // Default plan, could be enhanced later
+              }
+            }));
+            setUsers(usersWithFirm);
+          } else {
+            setUsers([]);
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch users:", error);
         setUsers([]);
@@ -95,12 +140,16 @@ export default function AdminUsers() {
     };
 
     void fetchUsers();
-  }, [selectedFirm, firms]);
+  }, [selectedFirm, firms, searchTerm]);
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // For global view, users are already filtered by API search
+  // For firm-specific view, apply local search filtering
+  const filteredUsers = selectedFirm === "__ALL__"
+    ? users
+    : users.filter(user =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -183,7 +232,8 @@ export default function AdminUsers() {
               onChange={(e) => setSelectedFirm(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
-              <option value="">Choose a firm to view users...</option>
+              <option value="__ALL__">All Users (Platform-wide)</option>
+              <option value="">Choose specific firm...</option>
               {firms.map((firm) => (
                 <option key={firm.id} value={firm.id}>
                   {firm.name} ({firm._count.users} users)
@@ -205,7 +255,7 @@ export default function AdminUsers() {
                 placeholder="Search by name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                disabled={!selectedFirm}
+                disabled={!selectedFirm || selectedFirm === ""}
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-50"
               />
             </div>
@@ -214,12 +264,12 @@ export default function AdminUsers() {
       </div>
 
       {/* Users List */}
-      {!selectedFirm ? (
+      {selectedFirm === "" ? (
         <div className="text-center py-12">
           <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Firm</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Select a View</h3>
           <p className="text-gray-600">
-            Choose a firm from the dropdown above to view and manage its users.
+            Choose to view all users platform-wide or select a specific firm.
           </p>
         </div>
       ) : loading ? (
@@ -312,16 +362,6 @@ export default function AdminUsers() {
         </div>
       )}
 
-      {/* Note about API Implementation */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-        <div className="flex items-center gap-2 text-yellow-800">
-          <Shield className="w-5 h-5" />
-          <span className="font-medium">Development Note</span>
-        </div>
-        <p className="text-yellow-700 text-sm mt-1">
-          This page currently shows simulated data. To fully implement user management, you'll need to create API endpoints for fetching users by firm and performing user management actions.
-        </p>
-      </div>
     </div>
   );
 }
