@@ -15,9 +15,17 @@ import type { PrismaClient } from "@prisma/client";
  */
 const store = new AsyncLocalStorage<{ firmId: string }>();
 
-/** Run `fn` (and everything it awaits) with the given firm as the active tenant. */
-export function withFirmContext<T>(firmId: string, fn: () => T): T {
-  return store.run({ firmId }, fn);
+/**
+ * Run `fn` (and everything it awaits) with the given firm as the active tenant.
+ *
+ * The callback is awaited *inside* the context frame on purpose: Prisma's
+ * `PrismaPromise` is lazy, so a caller like `() => prisma.x.findMany()` only
+ * starts the query when it is awaited. Awaiting here guarantees that happens
+ * while the AsyncLocalStorage context is still active, even when the caller
+ * hands back the promise without awaiting it themselves.
+ */
+export function withFirmContext<T>(firmId: string, fn: () => T | Promise<T>): Promise<T> {
+  return store.run({ firmId }, async () => fn());
 }
 
 /** The active firm id, or undefined when running outside a tenant context. */
@@ -29,13 +37,15 @@ export function getFirmContext(): string | undefined {
 export const RLS_ENFORCE = process.env.RLS_ENFORCE === "true";
 
 /**
- * Wrap a base Prisma client so every model operation runs inside a transaction
- * that first sets `app.current_firm_id`, which the RLS policies compare against.
+ * Wrap a base Prisma client so every model operation runs inside an interactive
+ * transaction that first sets `app.current_firm_id` — the value the RLS policies
+ * compare against — and then runs the operation on the SAME transaction client.
  *
- * Batching `set_config` + the query in a single `$transaction([...])` guarantees
- * both run on the same connection (a plain `SET LOCAL` outside a transaction
- * would not survive connection pooling). Raw and transaction calls are not
- * model operations, so they are not intercepted and cannot recurse.
+ * Routing the operation through `tx` is what guarantees the session variable and
+ * the query share one connection. (A batched `$transaction([setConfig, query]))`
+ * does not reliably bind them, and a plain `SET LOCAL` would not survive
+ * connection pooling.) The transaction client is unextended, so re-dispatching
+ * `tx[model][operation](args)` does not recurse through this wrapper.
  *
  * When no firm context is set the query is passed through untouched — under the
  * restricted role the policies then match no rows (fail-closed), which is why
@@ -45,14 +55,18 @@ export function applyRlsExtension(client: PrismaClient): PrismaClient {
   return client.$extends({
     query: {
       $allModels: {
-        async $allOperations({ args, query }) {
+        async $allOperations({ model, operation, args, query }) {
           const firmId = getFirmContext();
-          if (!firmId) return query(args);
-          const [, result] = await client.$transaction([
-            client.$executeRaw`SELECT set_config('app.current_firm_id', ${firmId}, true)`,
-            query(args),
-          ]);
-          return result;
+          if (!firmId || !model) return query(args);
+          const accessor = model.charAt(0).toLowerCase() + model.slice(1);
+          return client.$transaction(async (tx) => {
+            await tx.$executeRawUnsafe(
+              "SELECT set_config('app.current_firm_id', $1, true)",
+              firmId,
+            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return (tx as any)[accessor][operation](args);
+          });
         },
       },
     },

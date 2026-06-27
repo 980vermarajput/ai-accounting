@@ -32,16 +32,30 @@ Tenant isolation has two layers:
    invisible, and confirm a deliberately un-scoped query returns nothing rather
    than cross-tenant rows.
 
-## Validating cross-tenant blocking (psql)
+## Validating it (two ready-made tests)
 
-```sql
-SET ROLE app_user;
-SELECT set_config('app.current_firm_id', '<firm-A-uuid>', false);
-SELECT count(*) FROM documents;                 -- only firm A's rows
-SELECT set_config('app.current_firm_id', '<firm-B-uuid>', false);
-SELECT count(*) FROM documents;                 -- only firm B's rows
-RESET ROLE;
+**DB layer (psql):** proves the policies + role in isolation.
+
+```bash
+psql "$DATABASE_URL" -v app_pw="<app_user-password>" -f prisma/rls/setup-roles.sql
+psql "$DATABASE_URL" -f prisma/rls/rls-test.sql
+# expect: Firm A sees only Client A, Firm B only Client B,
+#         no context sees 0 rows, cross-tenant INSERT is rejected.
 ```
+
+**App layer (Prisma extension):** proves `withFirmContext` + the client extension
+scope queries correctly through the restricted role.
+
+```bash
+RLS_ENFORCE=true \
+DATABASE_URL=postgresql://app_user:<pw>@localhost:5432/ai_accounting?schema=public \
+ADMIN_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ai_accounting?schema=public \
+NODE_ENV=production \
+./node_modules/.bin/tsx src/scripts/rls-smoke.ts
+# expect all ✅
+```
+
+Both were run green locally against pgvector/pgvector:pg16 when this was added.
 
 > Migrations and data backfills must run as the owner/superuser (which bypasses
 > RLS); `prisma migrate` already connects as the configured user.

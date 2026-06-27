@@ -4,7 +4,7 @@
 -- RLS is bypassed by superusers and BYPASSRLS roles, so the app must connect as
 -- this NOSUPERUSER / no-BYPASSRLS role for the policies to take effect.
 --
---   psql "$DATABASE_URL" -v app_pw="'choose-a-strong-password'" -f setup-roles.sql
+--   psql "$DATABASE_URL" -v app_pw="choose-a-strong-password" -f setup-roles.sql
 --
 -- Then set, in the API environment:
 --   DATABASE_URL=postgresql://app_user:<password>@host:5432/ai_accounting?schema=public
@@ -12,12 +12,14 @@
 --   RLS_ENFORCE=true
 
 -- ── Application role (subject to RLS) ───────────────────────────────────────
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
-    EXECUTE format('CREATE ROLE app_user LOGIN PASSWORD %L', :'app_pw');
-  END IF;
-END $$;
+-- CREATE ROLE has no IF NOT EXISTS, so generate it conditionally and run via
+-- \gexec. The :'app_pw' psql variable is substituted here (outside any
+-- dollar-quoted block, where psql does NOT substitute variables).
+-- Pass the password WITHOUT surrounding quotes: psql's :'app_pw' supplies the
+-- string value, and %L quotes it safely. Run via \gexec.
+SELECT format('CREATE ROLE app_user LOGIN PASSWORD %L', :'app_pw')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user')
+\gexec
 
 -- No superuser, no RLS bypass — this is what makes the policies real.
 ALTER ROLE app_user NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
