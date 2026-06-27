@@ -146,10 +146,10 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Command Centre
+                  What needs you today
                 </h1>
                 <p className="text-lg text-muted-foreground mt-1">
-                  Real-time firm overview and intelligent alerts
+                  Your firm's action items, deadlines, and alerts — before they bite
                 </p>
                 <div className="flex items-center gap-4 mt-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -168,6 +168,31 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Active Clients (per-active-client plan — soft cap during pilot) */}
+              {data.clientUsage && (
+                <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/50">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                    <Users className="h-4 w-4" />
+                    <span>Active Clients</span>
+                  </div>
+                  <div
+                    className={cn(
+                      "text-lg font-semibold",
+                      data.clientUsage.withinAllowance
+                        ? "text-gray-900"
+                        : "text-amber-600",
+                    )}
+                  >
+                    {data.clientUsage.active} / {data.clientUsage.allowance}
+                  </div>
+                  {!data.clientUsage.withinAllowance && (
+                    <p className="text-[11px] text-amber-600 mt-1">
+                      Over your plan — upgrade soon
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Token Usage */}
               <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white/50">
                 <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
@@ -268,7 +293,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <CardTitle>Active Alerts</CardTitle>
+            <CardTitle>Needs your action</CardTitle>
             <span className="ml-auto text-xs text-muted">{data.alerts.length} shown</span>
           </CardHeader>
           <CardContent className="p-0">

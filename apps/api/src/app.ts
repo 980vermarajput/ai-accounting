@@ -17,6 +17,8 @@ import { deadlinesRouter } from "./routes/deadlines";
 import { teamRouter } from "./routes/team";
 import { telegramRouter } from "./routes/telegram";
 import { telegramSettingsRouter } from "./routes/telegram-settings";
+import { whatsappRouter } from "./routes/whatsapp";
+import { whatsappSettingsRouter } from "./routes/whatsapp-settings";
 import { platformAdminRouter } from "./routes/platform-admin-minimal";
 import { metricsMiddleware } from "./middleware/metrics";
 
@@ -76,6 +78,8 @@ app.use("/api/deadlines", deadlinesRouter);
 app.use("/api/team", teamRouter);
 app.use("/api/settings/telegram", telegramSettingsRouter);
 app.use("/api/webhooks/telegram", telegramRouter);
+app.use("/api/settings/whatsapp", whatsappSettingsRouter);
+app.use("/api/webhooks/whatsapp", whatsappRouter);
 
 // ─── 404 catch-all ───────────────────────────────────
 app.use((_req, res) => {

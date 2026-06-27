@@ -288,6 +288,11 @@ export interface CommandCentreResponse {
     today: number;
     cap: number;
   };
+  clientUsage: {
+    active: number;
+    allowance: number;
+    withinAllowance: boolean;
+  };
 }
 
 // ─── Team & Invites ──────────────────────────────────
@@ -335,6 +340,20 @@ export interface TelegramLinkCodeResponse {
   code: string;
   expiresIn: number;
   botUsername: string;
+}
+
+export interface WhatsAppLinkStatus {
+  linked: boolean;
+  waId?: string;
+  waName?: string;
+  alertsEnabled: boolean;
+  linkedAt?: string;
+}
+
+export interface WhatsAppLinkCodeResponse {
+  code: string;
+  expiresIn: number;
+  businessNumber: string;
 }
 
 // ─── API Responses ───────────────────────────────────

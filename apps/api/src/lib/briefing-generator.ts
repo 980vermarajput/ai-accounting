@@ -14,6 +14,7 @@ import { prisma } from "./prisma";
 import { getRedis } from "./redis";
 import { logger } from "./logger";
 import { checkTokenLimit, recordTokenUsage, calculateCostInr } from "./token-usage";
+import * as whatsapp from "./whatsapp";
 
 // ─── Constants ───────────────────────────────────────
 
@@ -55,6 +56,46 @@ export interface DailyBriefingResult {
   alertCount: number;
   metadata: Record<string, unknown>;
   createdAt: Date;
+}
+
+/**
+ * Push a firm's daily briefing to its WhatsApp-linked users (alertsEnabled).
+ * Proactive send → uses the approved `daily_briefing` template. No-ops when
+ * WhatsApp is unconfigured or no users are linked.
+ */
+export async function pushBriefingToWhatsApp(
+  firmId: string,
+  summary: string,
+): Promise<void> {
+  if (!whatsapp.isConfigured()) return;
+
+  try {
+    const links = await prisma.whatsAppLink.findMany({
+      where: { firmId, alertsEnabled: true, isActive: true },
+      select: { waId: true, waName: true },
+    });
+
+    for (const link of links) {
+      try {
+        await whatsapp.sendTemplate(
+          link.waId,
+          whatsapp.TEMPLATES.DAILY_BRIEFING,
+          [whatsapp.truncateMessage(summary, 1000)],
+          link.waName ?? "there",
+        );
+      } catch (err) {
+        logger.warn("Failed to send WhatsApp briefing", {
+          firmId,
+          error: (err as Error).message,
+        });
+      }
+    }
+  } catch (err) {
+    logger.error("Failed to push WhatsApp briefings", {
+      firmId,
+      error: (err as Error).message,
+    });
+  }
 }
 
 /**

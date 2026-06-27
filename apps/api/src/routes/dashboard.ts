@@ -26,6 +26,7 @@ import { prisma } from "../lib/prisma";
 import { getRedis } from "../lib/redis";
 import { generateDailyBriefing } from "../lib/briefing-generator";
 import { getDailyTokenUsage } from "../lib/token-usage";
+import { getClientUsage } from "../lib/client-usage";
 import { ApiError } from "../lib/api-error";
 
 export const dashboardRouter: Router = Router();
@@ -168,6 +169,9 @@ dashboardRouter.get(
       // 7. Token usage
       const tokenUsageToday = await getDailyTokenUsage(firmId);
 
+      // 7b. Active-client usage (per-active-client pricing — soft cap)
+      const clientUsage = await getClientUsage(firmId);
+
       // 8. Build response
       const payload: CommandCentreResponse = {
         briefing,
@@ -194,6 +198,7 @@ dashboardRouter.get(
           today: tokenUsageToday,
           cap: DAILY_TOKEN_CAP_PER_FIRM,
         },
+        clientUsage,
       };
 
       // 9. Cache in Redis

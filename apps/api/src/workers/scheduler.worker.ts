@@ -13,7 +13,7 @@ import { Worker } from "bullmq";
 import { getRedis } from "../lib/redis";
 import { prisma } from "../lib/prisma";
 import { detectAlertsForAllFirms } from "../lib/alert-detector";
-import { generateDailyBriefing } from "../lib/briefing-generator";
+import { generateDailyBriefing, pushBriefingToWhatsApp } from "../lib/briefing-generator";
 import { logger } from "../lib/logger";
 import type { SchedulerJobData } from "../queues/scheduler.queue";
 import { registerDailySchedule } from "../queues/scheduler.queue";
@@ -41,7 +41,8 @@ async function processSchedulerJob(job: Job<SchedulerJobData>): Promise<void> {
 
   for (const firm of firms) {
     try {
-      await generateDailyBriefing(firm.id);
+      const briefing = await generateDailyBriefing(firm.id);
+      await pushBriefingToWhatsApp(firm.id, briefing.summary);
       briefingSuccessCount++;
     } catch (err) {
       briefingErrorCount++;

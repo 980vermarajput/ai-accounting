@@ -75,6 +75,7 @@ clientsRouter.post(
           name,
           identifier,
           emailDomain,
+          lastActivityAt: new Date(), // counts as active from creation
           metadata:
             metadata !== undefined
               ? (metadata as Prisma.InputJsonValue)

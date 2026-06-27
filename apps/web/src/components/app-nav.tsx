@@ -17,6 +17,7 @@ import {
   CalendarClock,
   UserPlus2,
   Send,
+  MessageCircle,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -139,7 +140,35 @@ export function AppNav() {
               );
             })()}
 
-          {/* Telegram settings — all users */}
+          {/* WhatsApp settings — all users (primary channel) */}
+          {(() => {
+            const active =
+              pathname === "/settings/whatsapp" ||
+              pathname.startsWith("/settings/whatsapp/");
+            return (
+              <Link
+                href="/settings/whatsapp"
+                className={cn(
+                  "group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30",
+                  active
+                    ? "bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-white border border-emerald-500/30 shadow-lg backdrop-blur-sm"
+                    : "text-slate-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-1 border border-transparent",
+                )}
+              >
+                <MessageCircle
+                  className={cn(
+                    "h-5 w-5 shrink-0 transition-all duration-200",
+                    active
+                      ? "text-emerald-400 drop-shadow-sm"
+                      : "text-slate-400 group-hover:text-slate-200",
+                  )}
+                />
+                WhatsApp
+              </Link>
+            );
+          })()}
+
+          {/* Telegram settings — legacy */}
           {(() => {
             const active =
               pathname === "/settings/telegram" ||
@@ -161,6 +190,9 @@ export function AppNav() {
                     : "text-slate-400 group-hover:text-slate-200"
                 )} />
                 Telegram
+                <span className="ml-auto text-[9px] uppercase tracking-wide text-slate-500">
+                  legacy
+                </span>
               </Link>
             );
           })()}

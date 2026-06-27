@@ -210,6 +210,11 @@ export const commandCentreResponseSchema = z.object({
     today: z.number(),
     cap: z.number(),
   }),
+  clientUsage: z.object({
+    active: z.number(),
+    allowance: z.number(),
+    withinAllowance: z.boolean(),
+  }),
 });
 
 // ─── Team / Invite Schemas ───────────────────────────────────────────────────

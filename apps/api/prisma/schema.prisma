@@ -84,25 +84,27 @@ model Firm {
   id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name              String   @db.VarChar(255)
   slug              String   @unique @db.VarChar(100)
-  plan               Plan     @default(trial)
-  stripeCustomerId   String?  @map("stripe_customer_id") @db.VarChar(255)
-  knowledgeSnapshot  String?  @map("knowledge_snapshot")
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  plan              Plan     @default(trial)
+  clientAllowance   Int      @default(5) @map("client_allowance") // active-client cap for the plan (solo tier default)
+  stripeCustomerId  String?  @map("stripe_customer_id") @db.VarChar(255)
+  knowledgeSnapshot String?  @map("knowledge_snapshot")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  users         User[]
-  clients       Client[]
-  documents     Document[]
-  chunks        Chunk[]
-  queries       Query[]
-  auditLogs     AuditLog[]
-  syncJobs      SyncJob[]
-  chatSessions  ChatSession[]
-  alerts        Alert[]
-  briefings     DailyBriefing[]
+  users              User[]
+  clients            Client[]
+  documents          Document[]
+  chunks             Chunk[]
+  queries            Query[]
+  auditLogs          AuditLog[]
+  syncJobs           SyncJob[]
+  chatSessions       ChatSession[]
+  alerts             Alert[]
+  briefings          DailyBriefing[]
   extractedDeadlines ExtractedDeadline[]
-  invites       FirmInvite[]
-  telegramLinks TelegramLink[]
+  invites            FirmInvite[]
+  telegramLinks      TelegramLink[]
+  whatsappLinks      WhatsAppLink[]
 
   @@map("firms")
 }
@@ -110,28 +112,29 @@ model Firm {
 // ─── Users ───────────────────────────────────────────
 
 model User {
-  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  firmId                 String    @map("firm_id") @db.Uuid
-  email                  String    @unique @db.VarChar(255)
-  name                   String    @db.VarChar(255)
-  role                   UserRole  @default(member)
-  isAdmin                Boolean   @default(false) @map("is_admin") // Platform admin flag
-  googleRefreshTokenEnc  Bytes?    @map("google_refresh_token_enc")
-  googleTokenIv          Bytes?    @map("google_token_iv")
-  lastSyncAt             DateTime? @map("last_sync_at") @db.Timestamptz()
-  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId                String    @map("firm_id") @db.Uuid
+  email                 String    @unique @db.VarChar(255)
+  name                  String    @db.VarChar(255)
+  role                  UserRole  @default(member)
+  isAdmin               Boolean   @default(false) @map("is_admin") // Platform admin flag
+  googleRefreshTokenEnc Bytes?    @map("google_refresh_token_enc")
+  googleTokenIv         Bytes?    @map("google_token_iv")
+  lastSyncAt            DateTime? @map("last_sync_at") @db.Timestamptz()
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
-  firm         Firm          @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  documents    Document[]
-  queries      Query[]
-  auditLogs    AuditLog[]
-  syncJobs     SyncJob[]
-  clients      Client[]
-  chatSessions ChatSession[]
-  invitesCreated  FirmInvite[] @relation("InviteCreator")
-  invitesAccepted FirmInvite[] @relation("InviteAcceptor")
+  firm            Firm          @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  documents       Document[]
+  queries         Query[]
+  auditLogs       AuditLog[]
+  syncJobs        SyncJob[]
+  clients         Client[]
+  chatSessions    ChatSession[]
+  invitesCreated  FirmInvite[]  @relation("InviteCreator")
+  invitesAccepted FirmInvite[]  @relation("InviteAcceptor")
   telegramLink    TelegramLink?
+  whatsappLink    WhatsAppLink?
 
   @@index([firmId])
   @@map("users")
@@ -140,56 +143,58 @@ model User {
 // ─── Clients ─────────────────────────────────────────
 
 model Client {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  firmId      String   @map("firm_id") @db.Uuid
-  createdBy   String   @map("created_by") @db.Uuid
-  name        String   @db.VarChar(255)
-  identifier  String   @db.VarChar(100)
-  emailDomain String?  @map("email_domain") @db.VarChar(255)
-  metadata    Json?    @db.JsonB
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId         String    @map("firm_id") @db.Uuid
+  createdBy      String    @map("created_by") @db.Uuid
+  name           String    @db.VarChar(255)
+  identifier     String    @db.VarChar(100)
+  emailDomain    String?   @map("email_domain") @db.VarChar(255)
+  metadata       Json?     @db.JsonB
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz() // last document/deadline activity; drives active-client billing count
 
-  firm         Firm          @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  creator      User          @relation(fields: [createdBy], references: [id])
-  documents    Document[]
-  chunks       Chunk[]
-  queries      Query[]
-  chatSessions ChatSession[]
-  chatMessages ChatMessage[]
-  alerts       Alert[]
+  firm               Firm                @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  creator            User                @relation(fields: [createdBy], references: [id])
+  documents          Document[]
+  chunks             Chunk[]
+  queries            Query[]
+  chatSessions       ChatSession[]
+  chatMessages       ChatMessage[]
+  alerts             Alert[]
   extractedDeadlines ExtractedDeadline[]
 
   @@index([firmId])
+  @@index([firmId, lastActivityAt]) // active-client counting
   @@map("clients")
 }
 
 // ─── Documents ───────────────────────────────────────
 
 model Document {
-  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  firmId         String         @map("firm_id") @db.Uuid
-  userId         String         @map("user_id") @db.Uuid
-  clientId       String?        @map("client_id") @db.Uuid
-  source         DocumentSource
-  sourceId       String         @map("source_id") @db.VarChar(500)
-  gmailThreadId  String?        @map("gmail_thread_id") @db.VarChar(255)
-  filename       String         @db.VarChar(500)
-  mimeType       String         @map("mime_type") @db.VarChar(100)
-  s3Key          String         @map("s3_key") @db.VarChar(500)
-  textHash       String         @map("text_hash") @db.VarChar(64)
-  textExcerpt    String?        @map("text_excerpt")
-  status         DocumentStatus @default(pending)
-  errorMessage   String?        @map("error_message")
-  summary            String?
-  entities           Json?          @db.JsonB
-  deadlineExtracted  Boolean        @default(false) @map("deadline_extracted")
-  deadlineCount      Int            @default(0) @map("deadline_count")
-  sourceDate         DateTime       @map("source_date") @db.Timestamptz()
-  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId            String         @map("firm_id") @db.Uuid
+  userId            String         @map("user_id") @db.Uuid
+  clientId          String?        @map("client_id") @db.Uuid
+  source            DocumentSource
+  sourceId          String         @map("source_id") @db.VarChar(500)
+  gmailThreadId     String?        @map("gmail_thread_id") @db.VarChar(255)
+  filename          String         @db.VarChar(500)
+  mimeType          String         @map("mime_type") @db.VarChar(100)
+  s3Key             String         @map("s3_key") @db.VarChar(500)
+  textHash          String         @map("text_hash") @db.VarChar(64)
+  textExcerpt       String?        @map("text_excerpt")
+  status            DocumentStatus @default(pending)
+  errorMessage      String?        @map("error_message")
+  summary           String?
+  entities          Json?          @db.JsonB
+  deadlineExtracted Boolean        @default(false) @map("deadline_extracted")
+  deadlineCount     Int            @default(0) @map("deadline_count")
+  sourceDate        DateTime       @map("source_date") @db.Timestamptz()
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz()
 
-  firm               Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  user               User    @relation(fields: [userId], references: [id])
-  client             Client? @relation(fields: [clientId], references: [id])
+  firm               Firm                @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user               User                @relation(fields: [userId], references: [id])
+  client             Client?             @relation(fields: [clientId], references: [id])
   chunks             Chunk[]
   extractedDeadlines ExtractedDeadline[]
 
@@ -203,18 +208,18 @@ model Document {
 // ─── Chunks (with pgvector embedding) ────────────────
 
 model Chunk {
-  id         String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  documentId String                    @map("document_id") @db.Uuid
-  firmId     String                    @map("firm_id") @db.Uuid
-  clientId   String?                   @map("client_id") @db.Uuid
-  chunkIndex Int                       @map("chunk_index")
-  chunkText  String                    @map("chunk_text")
+  id         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId String                       @map("document_id") @db.Uuid
+  firmId     String                       @map("firm_id") @db.Uuid
+  clientId   String?                      @map("client_id") @db.Uuid
+  chunkIndex Int                          @map("chunk_index")
+  chunkText  String                       @map("chunk_text")
   // Prisma Unsupported() keeps the column in the schema so migrate dev won't drop it.
   // Reads/writes are done via $queryRaw / $executeRaw with explicit casts.
   embedding  Unsupported("vector(1536)")?
-  tokenCount Int                       @map("token_count")
-  metadata   Json?                     @db.JsonB
-  createdAt  DateTime                  @default(now()) @map("created_at") @db.Timestamptz()
+  tokenCount Int                          @map("token_count")
+  metadata   Json?                        @db.JsonB
+  createdAt  DateTime                     @default(now()) @map("created_at") @db.Timestamptz()
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   firm     Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
@@ -228,22 +233,22 @@ model Chunk {
 // ─── Queries (RAG chat history) ──────────────────────
 
 model Query {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  firmId             String   @map("firm_id") @db.Uuid
-  userId             String   @map("user_id") @db.Uuid
-  clientId           String?  @map("client_id") @db.Uuid
-  queryText          String   @map("query_text")
-  responseText       String   @map("response_text")
-  retrievedChunkIds  String[] @map("retrieved_chunk_ids") @db.Uuid
-  chunksSentToLlm    Int      @map("chunks_sent_to_llm")
-  llmModel           String   @map("llm_model") @db.VarChar(50)
-  llmTokensPrompt    Int      @map("llm_tokens_prompt")
-  llmTokensCompletion Int     @map("llm_tokens_completion")
-  llmCostInr         Decimal  @map("llm_cost_inr") @db.Decimal(10, 4)
-  latencyMs          Int      @map("latency_ms")
-  retrievalLatencyMs Int      @map("retrieval_latency_ms")
-  feedback           Feedback @default(none)
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId              String   @map("firm_id") @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  clientId            String?  @map("client_id") @db.Uuid
+  queryText           String   @map("query_text")
+  responseText        String   @map("response_text")
+  retrievedChunkIds   String[] @map("retrieved_chunk_ids") @db.Uuid
+  chunksSentToLlm     Int      @map("chunks_sent_to_llm")
+  llmModel            String   @map("llm_model") @db.VarChar(50)
+  llmTokensPrompt     Int      @map("llm_tokens_prompt")
+  llmTokensCompletion Int      @map("llm_tokens_completion")
+  llmCostInr          Decimal  @map("llm_cost_inr") @db.Decimal(10, 4)
+  latencyMs           Int      @map("latency_ms")
+  retrievalLatencyMs  Int      @map("retrieval_latency_ms")
+  feedback            Feedback @default(none)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   firm   Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
   user   User    @relation(fields: [userId], references: [id])
@@ -303,15 +308,15 @@ model SyncJob {
 // ─── Chat Sessions & Messages ─────────────────────────
 
 model ChatSession {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  firmId       String        @map("firm_id") @db.Uuid
-  userId       String        @map("user_id") @db.Uuid
-  clientId     String?       @map("client_id") @db.Uuid // Optional client context
-  title        String?       @db.VarChar(200) // Auto-generated from first message
-  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  lastActivity DateTime      @default(now()) @map("last_activity") @db.Timestamptz(6)
-  expiresAt    DateTime      @map("expires_at") @db.Timestamptz(6) // Auto-cleanup
-  isActive     Boolean       @default(true) @map("is_active")
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firmId       String   @map("firm_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  clientId     String?  @map("client_id") @db.Uuid // Optional client context
+  title        String?  @db.VarChar(200) // Auto-generated from first message
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastActivity DateTime @default(now()) @map("last_activity") @db.Timestamptz(6)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(6) // Auto-cleanup
+  isActive     Boolean  @default(true) @map("is_active")
 
   // Relationships
   firm     Firm          @relation(fields: [firmId], references: [id], onDelete: Cascade)
@@ -326,17 +331,17 @@ model ChatSession {
 }
 
 model ChatMessage {
-  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sessionId    String      @map("session_id") @db.Uuid
-  role         MessageRole
-  content      String      @db.Text
-  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId String      @map("session_id") @db.Uuid
+  role      MessageRole
+  content   String      @db.Text
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Metadata for smart context management
-  tokensUsed   Int?        @map("tokens_used") // Track token cost per message
-  clientId     String?     @map("client_id") @db.Uuid // Track client context
-  searchResults Int?       @map("search_results") // Number of doc chunks used
-  toolsUsed    String[]    @default([]) @map("tools_used") // Track which AI tools were called
+  tokensUsed    Int?     @map("tokens_used") // Track token cost per message
+  clientId      String?  @map("client_id") @db.Uuid // Track client context
+  searchResults Int?     @map("search_results") // Number of doc chunks used
+  toolsUsed     String[] @default([]) @map("tools_used") // Track which AI tools were called
 
   // Relationships
   session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -366,9 +371,9 @@ model ExtractedDeadline {
   alertId     String?  @map("alert_id")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  firm     Firm      @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  document Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  firm     Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  client   Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   @@index([firmId])
   @@index([firmId, date])
@@ -379,18 +384,18 @@ model ExtractedDeadline {
 // ─── Alerts ──────────────────────────────────────────
 
 model Alert {
-  id          String    @id @default(cuid())
-  firmId      String    @map("firm_id") @db.Uuid
-  clientId    String?   @map("client_id") @db.Uuid
-  type        AlertType
-  severity    Severity  @default(MEDIUM)
-  title       String
-  body        String    @db.Text
-  metadata    Json      @default("{}") @db.JsonB
-  isRead      Boolean   @default(false) @map("is_read")
-  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz()
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  expiresAt   DateTime? @map("expires_at") @db.Timestamptz()
+  id         String    @id @default(cuid())
+  firmId     String    @map("firm_id") @db.Uuid
+  clientId   String?   @map("client_id") @db.Uuid
+  type       AlertType
+  severity   Severity  @default(MEDIUM)
+  title      String
+  body       String    @db.Text
+  metadata   Json      @default("{}") @db.JsonB
+  isRead     Boolean   @default(false) @map("is_read")
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz()
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz()
 
   firm   Firm    @relation(fields: [firmId], references: [id], onDelete: Cascade)
   client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
@@ -446,18 +451,37 @@ model FirmInvite {
 // ─── Telegram Links ───────────────────────────────────────────────────
 
 model TelegramLink {
-  id              String   @id @default(cuid())
-  firmId          String   @map("firm_id") @db.Uuid
-  userId          String   @unique @map("user_id") @db.Uuid
-  telegramChatId  BigInt   @unique @map("telegram_chat_id")
-  telegramUsername String? @map("telegram_username") @db.VarChar(100)
-  alertsEnabled   Boolean  @default(false) @map("alerts_enabled")
-  linkedAt        DateTime @default(now()) @map("linked_at") @db.Timestamptz()
-  isActive        Boolean  @default(true) @map("is_active")
+  id               String   @id @default(cuid())
+  firmId           String   @map("firm_id") @db.Uuid
+  userId           String   @unique @map("user_id") @db.Uuid
+  telegramChatId   BigInt   @unique @map("telegram_chat_id")
+  telegramUsername String?  @map("telegram_username") @db.VarChar(100)
+  alertsEnabled    Boolean  @default(false) @map("alerts_enabled")
+  linkedAt         DateTime @default(now()) @map("linked_at") @db.Timestamptz()
+  isActive         Boolean  @default(true) @map("is_active")
 
   firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([firmId])
   @@map("telegram_links")
+}
+
+// ─── WhatsApp Links ───────────────────────────────────────────────────
+
+model WhatsAppLink {
+  id            String   @id @default(cuid())
+  firmId        String   @map("firm_id") @db.Uuid
+  userId        String   @unique @map("user_id") @db.Uuid
+  waId          String   @unique @map("wa_id") @db.VarChar(32) // phone number, digits only
+  waName        String?  @map("wa_name") @db.VarChar(100)
+  alertsEnabled Boolean  @default(false) @map("alerts_enabled")
+  linkedAt      DateTime @default(now()) @map("linked_at") @db.Timestamptz()
+  isActive      Boolean  @default(true) @map("is_active")
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([firmId])
+  @@map("whatsapp_links")
 }

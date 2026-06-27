@@ -24,6 +24,7 @@ import type { AlertType, Severity } from "@prisma/client";
 import { prisma } from "./prisma";
 import { logger } from "./logger";
 import { sendMessage, escapeHtml } from "./telegram";
+import * as whatsapp from "./whatsapp";
 
 // ─── Types ───────────────────────────────────────────
 
@@ -183,6 +184,102 @@ async function pushAlertToTelegram(
   }
 }
 
+// ─── WhatsApp Push Notifications ─────────────────────
+
+/**
+ * Send WhatsApp notifications for HIGH and CRITICAL alerts to firm users who
+ * have WhatsApp linked with alertsEnabled = true. Proactive sends MUST use an
+ * approved template (the `compliance_alert` campaign), per WhatsApp's rules.
+ */
+async function pushAlertToWhatsApp(
+  firmId: string,
+  alert: {
+    type: AlertType;
+    severity: Severity;
+    title: string;
+    body: string | null;
+  },
+): Promise<{ sent: number; failed: number }> {
+  if (alert.severity !== "HIGH" && alert.severity !== "CRITICAL") {
+    return { sent: 0, failed: 0 };
+  }
+  if (!whatsapp.isConfigured()) {
+    return { sent: 0, failed: 0 };
+  }
+
+  try {
+    const links = await prisma.whatsAppLink.findMany({
+      where: { firmId, alertsEnabled: true, isActive: true },
+      select: { waId: true, waName: true },
+    });
+    if (links.length === 0) return { sent: 0, failed: 0 };
+
+    const typeLabel = alert.type.replace(/_/g, " ");
+    let sent = 0;
+    let failed = 0;
+
+    for (const link of links) {
+      try {
+        // Template `compliance_alert` body params: [severity, title, body]
+        await whatsapp.sendTemplate(
+          link.waId,
+          whatsapp.TEMPLATES.COMPLIANCE_ALERT,
+          [
+            `${alert.severity} · ${typeLabel}`,
+            alert.title,
+            alert.body ?? typeLabel,
+          ],
+          link.waName ?? "there",
+        );
+        sent++;
+      } catch (err) {
+        failed++;
+        logger.warn("Failed to send WhatsApp alert", {
+          firmId,
+          error: (err as Error).message,
+        });
+      }
+    }
+
+    if (sent > 0) {
+      logger.info("WhatsApp alerts pushed", {
+        firmId,
+        alertType: alert.type,
+        severity: alert.severity,
+        sent,
+        failed,
+      });
+    }
+    return { sent, failed };
+  } catch (err) {
+    logger.error("Failed to push WhatsApp alerts", {
+      firmId,
+      error: (err as Error).message,
+    });
+    return { sent: 0, failed: 0 };
+  }
+}
+
+/**
+ * Fan an alert out to every push channel (Telegram = legacy, WhatsApp =
+ * primary). Each channel guards its own config + severity, so this is safe to
+ * call unconditionally from the detection rules.
+ */
+async function notifyAlert(
+  firmId: string,
+  alert: {
+    type: AlertType;
+    severity: Severity;
+    title: string;
+    body: string | null;
+  },
+): Promise<void> {
+  await Promise.allSettled([
+    pushAlertToTelegram(firmId, alert),
+    pushAlertToWhatsApp(firmId, alert),
+  ]);
+}
+
 // ─── Rule 1: INVOICE_OVERDUE ─────────────────────────
 
 async function detectInvoiceOverdue(firmId: string): Promise<AlertDetectionResult> {
@@ -254,7 +351,7 @@ async function detectInvoiceOverdue(firmId: string): Promise<AlertDetectionResul
         });
 
         // Push to Telegram (non-blocking, errors logged but don't affect result)
-        await pushAlertToTelegram(firmId, {
+        await notifyAlert(firmId, {
           type: "INVOICE_OVERDUE",
           severity: "HIGH",
           title: `Invoice overdue — ${client.name}`,
@@ -342,7 +439,7 @@ async function detectClientSilent(firmId: string): Promise<AlertDetectionResult>
         });
 
         // Push to Telegram (only HIGH/CRITICAL, non-blocking)
-        await pushAlertToTelegram(firmId, {
+        await notifyAlert(firmId, {
           type: "CLIENT_SILENT",
           severity,
           title: `No activity from ${client.name} in ${daysSince} days`,
@@ -436,7 +533,7 @@ async function detectHighRiskLanguage(firmId: string): Promise<AlertDetectionRes
           });
 
           // Push to Telegram (non-blocking)
-          await pushAlertToTelegram(firmId, {
+          await notifyAlert(firmId, {
             type: "HIGH_RISK_LANGUAGE",
             severity: "HIGH",
             title: `Risk language detected — "${keyword}" in ${clientName} document`,
@@ -526,7 +623,7 @@ async function detectGstFilingDue(firmId: string): Promise<AlertDetectionResult>
           },
         });
 
-        await pushAlertToTelegram(firmId, {
+        await notifyAlert(firmId, {
           type: "GST_FILING_DUE",
           severity,
           title: alert.title,
@@ -623,7 +720,7 @@ async function detectTdsPaymentDue(firmId: string): Promise<AlertDetectionResult
       },
     });
 
-    await pushAlertToTelegram(firmId, {
+    await notifyAlert(firmId, {
       type: "TDS_PAYMENT_DUE",
       severity,
       title: alert.title,
@@ -699,7 +796,7 @@ async function detectItrFilingDue(firmId: string): Promise<AlertDetectionResult>
           },
         });
 
-        await pushAlertToTelegram(firmId, {
+        await notifyAlert(firmId, {
           type: "ITR_FILING_DUE",
           severity,
           title: alert.title,
@@ -795,7 +892,7 @@ async function detectMissingDocuments(firmId: string): Promise<AlertDetectionRes
           },
         });
 
-        await pushAlertToTelegram(firmId, {
+        await notifyAlert(firmId, {
           type: "MISSING_DOCUMENTS",
           severity: "HIGH",
           title: alert.title,
@@ -902,7 +999,7 @@ async function detectDocumentExpiry(firmId: string): Promise<AlertDetectionResul
           },
         });
 
-        await pushAlertToTelegram(firmId, {
+        await notifyAlert(firmId, {
           type: "DOCUMENT_EXPIRY",
           severity,
           title: alert.title,
