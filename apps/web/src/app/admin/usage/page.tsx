@@ -312,7 +312,7 @@ export default function AdminUsage() {
             <div>
               <h3 className="text-lg font-semibold text-red-900">Performance Alert</h3>
               <p className="text-red-700 mt-1">
-                P95 latency is higher than recommended (>3000ms). Consider optimizing API responses or scaling infrastructure.
+                P95 latency is higher than recommended (&gt;3000ms). Consider optimizing API responses or scaling infrastructure.
               </p>
             </div>
           </div>

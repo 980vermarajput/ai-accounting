@@ -3,6 +3,7 @@ import { ApiError } from "../lib/api-error";
 import { verifyJwt } from "../lib/auth";
 import { getRedis } from "../lib/redis";
 import { logger } from "../lib/logger";
+import { withFirmContext } from "../lib/tenant-context";
 
 /**
  * Authenticated user payload attached to req after JWT verification.
@@ -44,7 +45,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     if (typeof devHeader === "string") {
       try {
         req.user = JSON.parse(devHeader) as AuthUser;
-        return next();
+        return withFirmContext(req.user.firmId, () => next());
       } catch {
         // fall through to real JWT check
       }
@@ -81,7 +82,9 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
           ApiError.unauthorized("Session has been revoked — please sign in again"),
         );
       }
-      next();
+      // Carry the tenant context through the rest of the request so the RLS layer
+      // (when enforcement is on) can scope every query to this firm.
+      withFirmContext(req.user!.firmId, () => next());
     })
     .catch((err) => {
       // Redis down — FAIL CLOSED for security (reject potentially revoked tokens)

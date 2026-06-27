@@ -5,7 +5,8 @@
  * Allows linking/unlinking accounts and managing notifications.
  */
 
-import { Router, Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/auth";

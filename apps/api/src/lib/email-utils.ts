@@ -8,7 +8,7 @@
 export function extractEmailsFromHeader(header: string): string[] {
   if (!header) return [];
 
-  const emailRegex = /[\w\.-]+@[\w\.-]+\.\w+/g;
+  const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
   return header.match(emailRegex) || [];
 }
 

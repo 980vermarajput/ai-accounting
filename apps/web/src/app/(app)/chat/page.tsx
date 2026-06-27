@@ -135,6 +135,7 @@ function MessageBubble({
   onFollowup: (q: string) => void;
 }) {
   const [showSources, setShowSources] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   if (message.role === "user") {
     return (
@@ -162,7 +163,6 @@ function MessageBubble({
   // Assistant message
   const hasSources = message.sources.length > 0;
   const conf = CONFIDENCE_STYLES[message.confidence.level];
-  const [copied, setCopied] = useState(false);
 
   const handleWhatsAppCopy = () => {
     const text = formatForWhatsApp(message.content, message.sources);

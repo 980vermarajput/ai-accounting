@@ -10,7 +10,7 @@ This is a **pnpm + Turborepo monorepo** with three packages:
 | `@ai-accounting/web`    | `apps/web`        | Next.js 14 App Router, React 18, Tailwind CSS | Frontend on port **3000**                    |
 | `@ai-accounting/shared` | `packages/shared` | Pure TypeScript                               | Shared types & schemas consumed by both apps |
 
-The product is a **multi-tenant RAG SaaS** for Indian chartered accountants. Data isolation is enforced via `firm_id` and PostgreSQL RLS. The full domain model lives in `packages/shared/src/types.ts` — always import types from `@ai-accounting/shared`, never duplicate them.
+The product is a **multi-tenant RAG SaaS** for Indian chartered accountants. Data isolation is done at the application layer — every query filters on `firm_id`. A database-level RLS backstop exists but is off by default (see `apps/api/prisma/rls/README.md`), so app-level filtering is what actually protects tenants today. The full domain model lives in `packages/shared/src/types.ts` — always import types from `@ai-accounting/shared`, never duplicate them.
 
 ## Build & Dev Commands
 
@@ -74,7 +74,7 @@ pnpm --filter @ai-accounting/shared test       # schemas only
 
 ## Multi-Tenancy
 
-Every data-bearing entity **must** include `firmId: string`. Database queries will use RLS on `firm_id` — never skip this field when creating new types or DB operations.
+Every data-bearing entity **must** include `firmId: string`, and every query **must** filter on it (`where: { firmId }`). This app-level filtering is the real isolation boundary — never skip it. The optional DB-level RLS backstop (off by default) does not protect you while the app connects as a superuser.
 
 ## Environment & Docker
 
@@ -113,4 +113,4 @@ Every data-bearing entity **must** include `firmId: string`. Database queries wi
 - **Background jobs** will use BullMQ + Redis — heavy work (sync, embedding) must never block API request threads
 - **Prisma + pgvector** for database + vector storage — no separate vector DB needed
 - **Auth middleware** in dev mode uses `X-Dev-User` header as JSON bypass; production uses real JWT verification via `jsonwebtoken`
-- **Multi-tenancy** via `firm_id` on every table with RLS policies enforced at DB level
+- **Multi-tenancy** via `firm_id` on every table, enforced at the application layer; DB-level RLS policies exist as an opt-in backstop (`apps/api/prisma/rls/`)

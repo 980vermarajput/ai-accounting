@@ -15,7 +15,8 @@
  *   /unlink      - Unlink Telegram account
  */
 
-import { Router, Request, Response } from "express";
+import type { Request, Response } from "express";
+import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { getRedis } from "../lib/redis";
 import { logger } from "../lib/logger";

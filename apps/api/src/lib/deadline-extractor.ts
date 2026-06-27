@@ -85,7 +85,7 @@ const COMPLIANCE_KEYWORDS = [
  */
 const DATE_PATTERNS = [
   // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-  /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/gi,
+  /\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})\b/gi,
   // YYYY-MM-DD (ISO)
   /\b(\d{4})-(\d{2})-(\d{2})\b/g,
   // "15 January 2025" / "15th January 2025"
@@ -93,7 +93,7 @@ const DATE_PATTERNS = [
   // "January 15, 2025"
   /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b/gi,
   // "by/before/due/deadline/last date" followed by a date-like token
-  /\b(?:by|before|due|deadline|last\s+date)\s*[:\s]\s*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/gi,
+  /\b(?:by|before|due|deadline|last\s+date)\s*[:\s]\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})\b/gi,
 ];
 
 // ─── Lazy OpenAI client ──────────────────────────────

@@ -371,7 +371,7 @@ export async function generateRagAnswer(
     }
   ];
 
-  let messages: Array<any> = [
+  const messages: Array<any> = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userMessage },
   ];

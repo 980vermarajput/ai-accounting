@@ -53,7 +53,11 @@ export async function recordRequestMetrics({
       redis.expire(`metrics:requests:global:${today}`, 90 * 24 * 60 * 60),
     ]);
   } catch (error) {
-    logger.error("Failed to record request metrics", { error, route, method });
+    logger.error("Failed to record request metrics", {
+      error: error instanceof Error ? error.message : String(error),
+      route,
+      method,
+    });
   }
 }
 
@@ -71,7 +75,10 @@ export async function getP95Latency(route: string): Promise<number> {
     const p95Index = Math.ceil(nums.length * 0.95) - 1;
     return nums[p95Index] || 0;
   } catch (error) {
-    logger.error("Failed to get P95 latency", { error, route });
+    logger.error("Failed to get P95 latency", {
+      error: error instanceof Error ? error.message : String(error),
+      route,
+    });
     return 0;
   }
 }
@@ -106,7 +113,10 @@ export async function getDailyRequestCount(
 
     return results.reverse(); // Return chronological order
   } catch (error) {
-    logger.error("Failed to get daily request count", { error, route });
+    logger.error("Failed to get daily request count", {
+      error: error instanceof Error ? error.message : String(error),
+      route,
+    });
     return [];
   }
 }
@@ -177,7 +187,9 @@ export async function getGlobalMetrics(): Promise<{
       topRoutesByRequests,
     };
   } catch (error) {
-    logger.error("Failed to get global metrics", { error });
+    logger.error("Failed to get global metrics", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {
       totalRequestsToday: 0,
       totalRequestsLast30Days: 0,
@@ -213,7 +225,10 @@ export async function getFirmRequestMetrics(
 
     return results.reverse(); // Chronological order
   } catch (error) {
-    logger.error("Failed to get firm request metrics", { error, firmId });
+    logger.error("Failed to get firm request metrics", {
+      error: error instanceof Error ? error.message : String(error),
+      firmId,
+    });
     return [];
   }
 }

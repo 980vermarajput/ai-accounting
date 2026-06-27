@@ -68,7 +68,7 @@ async function assignExistingDocuments() {
           const docText = doc.filename.toLowerCase();
 
           // Extract any email-like patterns from the subject line
-          const emailRegex = /[\w\.-]+@[\w\.-]+\.\w+/g;
+          const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
           const emailsInSubject = docText.match(emailRegex) || [];
 
           if (emailsInSubject.length > 0) {

@@ -131,7 +131,9 @@ export async function requireAdminAuth(
 
     next();
   } catch (error) {
-    logger.error("Admin auth middleware error", { error });
+    logger.error("Admin auth middleware error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     const response: ApiResponse = {
       success: false,
       error: { code: "SERVER_ERROR", message: "Authentication failed" },
@@ -142,6 +144,7 @@ export async function requireAdminAuth(
 
 // Extend Express Request type for admin user
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- required for Express Request augmentation
   namespace Express {
     interface Request {
       adminUser?: {

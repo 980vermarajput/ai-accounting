@@ -137,7 +137,7 @@ platformAdminRouter.get(
   "/firms/:firmId",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firmId } = req.params;
+      const firmId = String(req.params.firmId);
 
       // Get firm details with counts
       const firm = await prisma.firm.findUnique({
@@ -194,11 +194,11 @@ platformAdminRouter.get(
         ...firm,
         metrics: {
           totalTokensLast30d:
-            (usageStats._sum.llmTokensPrompt || 0) +
-            (usageStats._sum.llmTokensCompletion || 0),
-          estimatedCostLast30d: Number(usageStats._sum.llmCostInr) || 0,
+            (usageStats._sum?.llmTokensPrompt || 0) +
+            (usageStats._sum?.llmTokensCompletion || 0),
+          estimatedCostLast30d: Number(usageStats._sum?.llmCostInr) || 0,
           queriesLast24h,
-          avgLatencyMs: Math.round(usageStats._avg.latencyMs || 0),
+          avgLatencyMs: Math.round(usageStats._avg?.latencyMs || 0),
         },
       };
 
@@ -219,7 +219,7 @@ platformAdminRouter.get(
   "/firms/:firmId/users",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firmId } = req.params;
+      const firmId = String(req.params.firmId);
 
       // Verify firm exists
       const firm = await prisma.firm.findUnique({
@@ -268,7 +268,7 @@ platformAdminRouter.get(
   "/firms/:firmId/documents",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firmId } = req.params;
+      const firmId = String(req.params.firmId);
       const page = parseInt(req.query.page as string) || 1;
       const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
       const skip = (page - 1) * limit;
@@ -295,7 +295,7 @@ platformAdminRouter.get(
           select: {
             id: true,
             filename: true,
-            size: true,
+            mimeType: true,
             createdAt: true,
             client: {
               select: { id: true, name: true },
@@ -338,7 +338,7 @@ platformAdminRouter.get(
   "/firms/:firmId/queries",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { firmId } = req.params;
+      const firmId = String(req.params.firmId);
       const page = parseInt(req.query.page as string) || 1;
       const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
       const skip = (page - 1) * limit;
@@ -364,12 +364,12 @@ platformAdminRouter.get(
           where: { firmId },
           select: {
             id: true,
-            query: true,
-            result: true,
+            queryText: true,
+            responseText: true,
             llmTokensPrompt: true,
             llmTokensCompletion: true,
             llmCostInr: true,
-            durationMs: true,
+            latencyMs: true,
             createdAt: true,
             user: {
               select: { id: true, name: true, email: true },
@@ -545,7 +545,6 @@ platformAdminRouter.put(
       const response: ApiResponse<typeof settingsUpdate> = {
         success: true,
         data: settingsUpdate,
-        message: "Platform settings updated successfully"
       };
 
       res.json(response);

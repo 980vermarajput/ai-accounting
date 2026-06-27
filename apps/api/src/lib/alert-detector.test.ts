@@ -20,14 +20,23 @@ vi.mock("./prisma", () => ({
     },
     document: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      groupBy: vi.fn(),
     },
     client: {
       findMany: vi.fn(),
+      count: vi.fn(),
     },
     chunk: {
       findMany: vi.fn(),
     },
     firm: {
+      findMany: vi.fn(),
+    },
+    extractedDeadline: {
+      findMany: vi.fn(),
+    },
+    telegramLink: {
       findMany: vi.fn(),
     },
     $queryRaw: vi.fn(),
@@ -66,6 +75,8 @@ describe("alert-detector", () => {
       vi.mocked(prisma.client.findMany).mockResolvedValue([]);
       // No high-risk chunks
       vi.mocked(prisma.chunk.findMany).mockResolvedValue([]);
+      // No extracted deadlines — no MISSING_DOCUMENTS / DOCUMENT_EXPIRY alerts
+      vi.mocked(prisma.extractedDeadline.findMany).mockResolvedValue([]);
 
       const result = await detectAlertsForFirm(FIRM_ID);
 
