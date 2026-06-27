@@ -1,0 +1,20 @@
+# Netlify deploy for the Next.js frontend (apps/web) from the monorepo root.
+# Vercel is the smoother path for Next.js; use this if you prefer Netlify.
+
+[build]
+  base = "."
+  command = "pnpm --filter @ai-accounting/shared build && pnpm --filter @ai-accounting/web build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  # Pin the toolchain to match the repo.
+  NODE_VERSION = "20"
+  PNPM_VERSION = "9"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Required for Next.js (SSR/ISR, image optimization, etc.) on Netlify.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Set NEXT_PUBLIC_API_URL in the Netlify UI (Site settings → Environment variables)
+# to your public API hostname, e.g. https://api.yourdomain.com

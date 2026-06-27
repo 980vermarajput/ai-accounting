@@ -11,6 +11,9 @@ out/
 .env
 .env.local
 .env.*.local
+.env.prod
+.env.production
+!.env.prod.example
 
 # IDE
 .vscode/settings.json

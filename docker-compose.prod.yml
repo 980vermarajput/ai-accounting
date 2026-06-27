@@ -1,0 +1,101 @@
+# Production stack for a single always-on host (e.g. an Oracle Cloud Always-Free VM).
+# Runs Postgres + Redis + the API (with in-process workers) and exposes them to the
+# internet through a Cloudflare Tunnel — no public ports are opened on the box.
+#
+# Usage (from the repo root, on the VM):
+#   cp .env.prod.example .env.prod        # fill in real values
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm migrate
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# The frontend (web) is included but optional — drop it and host on Vercel/Netlify
+# instead (recommended). See DEPLOYMENT.md.
+
+services:
+  # ─── PostgreSQL + pgvector ─────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_accounting}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # No published ports — only reachable on the internal compose network.
+
+  # ─── Redis (BullMQ + cache + rate-limit + JWT blacklist) ───────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── API + background workers (single process) ─────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # No published ports — cloudflared reaches it at http://api:4000 internally.
+
+  # ─── Web frontend (OPTIONAL — omit if using Vercel/Netlify) ────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env.prod}
+    depends_on:
+      - api
+
+  # ─── Cloudflare Tunnel (public HTTPS, no open ports) ───────────────────────
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env.prod}
+    depends_on:
+      - api
+      - web
+
+  # ─── One-shot migration runner (profile: tools) ────────────────────────────
+  # Uses the API build stage, which still has the source, the Prisma CLI and the
+  # migrations folder. Run it before `up`:
+  #   docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm migrate
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: build
+    command: sh -c "cd apps/api && pnpm exec prisma migrate deploy"
+    env_file: .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+
+volumes:
+  postgres_data:
+  redis_data:
