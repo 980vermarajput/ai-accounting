@@ -41,3 +41,10 @@ coverage/
 Thumbs.db
 
 test-data
+
+# Local MCP server config
+.mcp.json
+
+# Generated test fixtures (regenerate via create_test_documents.py)
+/TEST_INVOICE.pdf
+/TEST_BALANCE_SHEET.*
