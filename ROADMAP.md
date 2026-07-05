@@ -1,8 +1,8 @@
 # Product Strategy & Roadmap
 
-> **Read this before the PRD.** The PRD describes what was *built* (an AI search assistant over a
-> CA's Gmail/Drive). This document describes where the product is *going* and why. Where the two
-> conflict, this document reflects the current strategic direction.
+> **Read this first.** This document is the strategic direction and phase plan. `PRD.md` (v3.0)
+> is the Phase 1 build spec derived from it. The as-built record of the pre-pivot platform lives
+> in `.github/currentState.md`; the old "search your docs" PRD (v2.8) is in git history.
 
 ---
 
